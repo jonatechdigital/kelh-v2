@@ -1,9 +1,197 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Banknote, TrendingDown, UserPlus, FileText } from 'lucide-react';
-import { formatDate } from '@/lib/utils';
+import { Users, TrendingDown, BarChart, Loader2 } from 'lucide-react';
+import { formatDate, formatCurrency } from '@/lib/utils';
+import { createClient } from '@/utils/supabase/client';
+
+type Timeframe = 'today' | 'yesterday' | 'week' | 'month';
+
+interface LedgerRecord {
+  id: number;
+  transaction_type: 'INCOME' | 'EXPENSE';
+  payment_method: string;
+  amount: number;
+  patient_id: number | null;
+  description: string;
+  created_at: string;
+  patients: {
+    id: number;
+    name: string;
+    created_at: string;
+  } | null;
+}
+
+interface DashboardMetrics {
+  totalRevenue: number;
+  cashRevenue: number;
+  digitalRevenue: number;
+  totalPatients: number;
+  newPatients: number;
+  totalExpenses: number;
+  expenseCount: number;
+}
 
 export default function Home() {
-  const today = new Date();
+  const [timeframe, setTimeframe] = useState<Timeframe>('today');
+  const [metrics, setMetrics] = useState<DashboardMetrics>({
+    totalRevenue: 0,
+    cashRevenue: 0,
+    digitalRevenue: 0,
+    totalPatients: 0,
+    newPatients: 0,
+    totalExpenses: 0,
+    expenseCount: 0,
+  });
+  const [recentActivity, setRecentActivity] = useState<LedgerRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [timeframe]);
+
+  const getDateRange = (): { start: Date; end: Date } => {
+    const now = new Date();
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    let start: Date;
+
+    switch (timeframe) {
+      case 'today':
+        start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+        break;
+      case 'yesterday':
+        start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0);
+        end.setDate(end.getDate() - 1);
+        break;
+      case 'week':
+        start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0, 0);
+        break;
+      case 'month':
+        start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        break;
+      default:
+        start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    }
+
+    return { start, end };
+  };
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      const supabase = createClient();
+      const { start, end } = getDateRange();
+
+      // Fetch ledger records with patient data
+      const { data: ledgerData, error: ledgerError } = await supabase
+        .from('ledger')
+        .select(`
+          id,
+          transaction_type,
+          payment_method,
+          amount,
+          patient_id,
+          description,
+          created_at,
+          patients (
+            id,
+            name,
+            created_at
+          )
+        `)
+        .gte('created_at', start.toISOString())
+        .lte('created_at', end.toISOString())
+        .order('created_at', { ascending: false });
+
+      if (ledgerError) {
+        console.error('Error fetching ledger data:', ledgerError);
+        return;
+      }
+
+      const records = (ledgerData || []) as LedgerRecord[];
+
+      // Calculate metrics
+      let totalRevenue = 0;
+      let cashRevenue = 0;
+      let digitalRevenue = 0;
+      let totalExpenses = 0;
+      let expenseCount = 0;
+      const uniquePatients = new Set<number>();
+      const newPatientIds = new Set<number>();
+
+      records.forEach((record) => {
+        if (record.transaction_type === 'INCOME') {
+          totalRevenue += record.amount;
+          if (record.payment_method === 'Cash') {
+            cashRevenue += record.amount;
+          } else {
+            digitalRevenue += record.amount;
+          }
+        } else if (record.transaction_type === 'EXPENSE') {
+          totalExpenses += record.amount;
+          expenseCount++;
+        }
+
+        // Track unique patients
+        if (record.patient_id) {
+          uniquePatients.add(record.patient_id);
+          
+          // Check if patient was created in this timeframe
+          if (record.patients) {
+            const patientCreatedAt = new Date(record.patients.created_at);
+            if (patientCreatedAt >= start && patientCreatedAt <= end) {
+              newPatientIds.add(record.patient_id);
+            }
+          }
+        }
+      });
+
+      setMetrics({
+        totalRevenue,
+        cashRevenue,
+        digitalRevenue,
+        totalPatients: uniquePatients.size,
+        newPatients: newPatientIds.size,
+        totalExpenses,
+        expenseCount,
+      });
+
+      // Set recent activity (last 5 records)
+      setRecentActivity(records.slice(0, 5));
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatTime = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: false 
+    });
+  };
+
+  const getPaymentMethodColor = (method: string): string => {
+    switch (method) {
+      case 'Cash':
+        return 'bg-green-100 text-green-800';
+      case 'MoMo':
+      case 'Airtel Money':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'Card':
+        return 'bg-blue-100 text-blue-800';
+      case 'Insurance':
+        return 'bg-purple-100 text-purple-800';
+      case 'Partner':
+        return 'bg-orange-100 text-orange-800';
+      default:
+        return 'bg-slate-100 text-slate-800';
+    }
+  };
 
   return (
     <main className="min-h-screen bg-white p-8">
@@ -11,68 +199,156 @@ export default function Home() {
         {/* Header */}
         <header className="mb-8">
           <h1 className="text-4xl font-bold text-slate-900 mb-2">KELH Manager V2</h1>
-          <p className="text-slate-600">{formatDate(today)}</p>
+          <p className="text-slate-600">{formatDate(new Date())}</p>
         </header>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {/* Cash in Drawer */}
-          <div className="bg-slate-100 rounded-xl p-6">
-            <h3 className="text-sm font-medium text-slate-600 mb-2">Cash in Drawer</h3>
-            <p className="text-3xl font-bold text-green-600">UGX 0</p>
-          </div>
-
-          {/* Digital / Partner */}
-          <div className="bg-slate-100 rounded-xl p-6">
-            <h3 className="text-sm font-medium text-slate-600 mb-2">Digital / Partner</h3>
-            <p className="text-3xl font-bold text-blue-600">UGX 0</p>
-          </div>
-
-          {/* Patients Today */}
-          <div className="bg-slate-100 rounded-xl p-6">
-            <h3 className="text-sm font-medium text-slate-600 mb-2">Patients Today</h3>
-            <p className="text-3xl font-bold text-purple-600">0</p>
+        {/* Timeframe Selector */}
+        <div className="mb-6">
+          <div className="flex gap-2 flex-wrap">
+            {(['today', 'yesterday', 'week', 'month'] as Timeframe[]).map((tf) => (
+              <button
+                key={tf}
+                onClick={() => setTimeframe(tf)}
+                className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+                  timeframe === tf
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                {tf.charAt(0).toUpperCase() + tf.slice(1)}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Main Action Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* New Sale */}
-          <Link 
-            href="/sales/new"
-            className="bg-green-600 hover:bg-green-700 text-white rounded-2xl shadow-md p-6 h-32 flex items-center justify-center gap-4 transition-colors"
-          >
-            <Banknote size={40} />
-            <span className="text-2xl font-bold">NEW SALE</span>
-          </Link>
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="animate-spin text-blue-600" size={48} />
+          </div>
+        ) : (
+          <>
+            {/* Section A: Action Grid - Primary Actions */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              {/* Check-In / Search */}
+              <Link
+                href="/patients"
+                className="bg-blue-600 hover:bg-blue-700 text-white rounded-2xl shadow-md p-6 h-32 flex items-center justify-center gap-4 transition-colors"
+              >
+                <Users size={48} />
+                <span className="text-2xl font-bold text-center">CHECK-IN / SEARCH</span>
+              </Link>
 
-          {/* New Expense */}
-          <Link 
-            href="/expenses/new"
-            className="bg-red-600 hover:bg-red-700 text-white rounded-2xl shadow-md p-6 h-32 flex items-center justify-center gap-4 transition-colors"
-          >
-            <TrendingDown size={40} />
-            <span className="text-2xl font-bold">NEW EXPENSE</span>
-          </Link>
+              {/* Record Expense */}
+              <Link
+                href="/expenses/new"
+                className="bg-red-600 hover:bg-red-700 text-white rounded-2xl shadow-md p-6 h-32 flex items-center justify-center gap-4 transition-colors"
+              >
+                <TrendingDown size={48} />
+                <span className="text-2xl font-bold text-center">RECORD EXPENSE</span>
+              </Link>
 
-          {/* Check-In */}
-          <Link 
-            href="/patients"
-            className="bg-blue-600 hover:bg-blue-700 text-white rounded-2xl shadow-md p-6 h-32 flex items-center justify-center gap-4 transition-colors"
-          >
-            <UserPlus size={40} />
-            <span className="text-2xl font-bold">CHECK-IN</span>
-          </Link>
+              {/* View Reports */}
+              <Link
+                href="/reports"
+                className="bg-slate-600 hover:bg-slate-700 text-white rounded-2xl shadow-md p-6 h-32 flex items-center justify-center gap-4 transition-colors"
+              >
+                <BarChart size={48} />
+                <span className="text-2xl font-bold text-center">VIEW REPORTS</span>
+              </Link>
+            </div>
 
-          {/* Reports */}
-          <Link 
-            href="/reports"
-            className="bg-slate-600 hover:bg-slate-700 text-white rounded-2xl shadow-md p-6 h-32 flex items-center justify-center gap-4 transition-colors"
-          >
-            <FileText size={40} />
-            <span className="text-2xl font-bold">REPORTS</span>
-          </Link>
-        </div>
+            {/* Section B: Metric Cards - Summary Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              {/* Revenue (Income) */}
+              <div className="bg-slate-100 rounded-xl p-6">
+                <h3 className="text-sm font-medium text-slate-600 mb-2">Revenue (Income)</h3>
+                <p className="text-3xl font-bold text-green-600 mb-3">
+                  {formatCurrency(metrics.totalRevenue)}
+                </p>
+                <div className="space-y-1 text-sm">
+                  <p className="text-slate-600">
+                    Cash: <span className="font-semibold">{formatCurrency(metrics.cashRevenue)}</span>
+                  </p>
+                  <p className="text-slate-600">
+                    Digital: <span className="font-semibold">{formatCurrency(metrics.digitalRevenue)}</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Patients (Volume) */}
+              <div className="bg-slate-100 rounded-xl p-6">
+                <h3 className="text-sm font-medium text-slate-600 mb-2">Patients (Volume)</h3>
+                <p className="text-3xl font-bold text-blue-600 mb-3">
+                  {metrics.totalPatients}
+                </p>
+                <div className="text-sm">
+                  <p className="text-slate-600">
+                    <span className="font-semibold">{metrics.newPatients}</span> New Files
+                  </p>
+                </div>
+              </div>
+
+              {/* Expenses (Money Out) */}
+              <div className="bg-slate-100 rounded-xl p-6">
+                <h3 className="text-sm font-medium text-slate-600 mb-2">Expenses (Money Out)</h3>
+                <p className="text-3xl font-bold text-red-600 mb-3">
+                  {formatCurrency(metrics.totalExpenses)}
+                </p>
+                <div className="text-sm">
+                  <p className="text-slate-600">
+                    <span className="font-semibold">{metrics.expenseCount}</span> Transactions
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Section C: Recent Activity Feed */}
+            <div className="bg-slate-50 rounded-xl p-6">
+              <h2 className="text-2xl font-bold text-slate-900 mb-4">Recent Activity</h2>
+              
+              {recentActivity.length === 0 ? (
+                <p className="text-slate-600 text-center py-8">No recent activity for this timeframe.</p>
+              ) : (
+                <div className="space-y-2">
+                  {recentActivity.map((record) => (
+                    <Link
+                      key={record.id}
+                      href={record.patient_id ? `/patients/${record.patient_id}` : '#'}
+                      className={`block bg-white rounded-lg p-4 border border-slate-200 transition-colors ${
+                        record.patient_id ? 'hover:border-blue-400 hover:shadow-md cursor-pointer' : 'cursor-default'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-4 flex-1 min-w-0">
+                          <span className="text-sm font-mono text-slate-600 whitespace-nowrap">
+                            {formatTime(record.created_at)}
+                          </span>
+                          <span className="text-base font-medium text-slate-900 truncate">
+                            {record.transaction_type === 'EXPENSE' 
+                              ? record.description 
+                              : record.patients?.name || 'Unknown Patient'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className={`text-lg font-bold ${
+                            record.transaction_type === 'INCOME' ? 'text-green-600' : 'text-red-600'
+                          }`}>
+                            {formatCurrency(record.amount)}
+                          </span>
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
+                            getPaymentMethodColor(record.payment_method)
+                          }`}>
+                            {record.payment_method}
+                          </span>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </main>
   );
