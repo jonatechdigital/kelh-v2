@@ -35,3 +35,7 @@ export function formatDate(date: Date | string): string {
   
   return `${day}/${month}/${year}`;
 }
+export function formatPatientId(id: number | null | undefined) {
+  if (!id) return 'PENDING'; // For new patients not saved yet
+  return `KELH-${id}`;
+}

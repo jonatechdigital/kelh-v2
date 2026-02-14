@@ -19,6 +19,7 @@
 - **Currency:** "UGX 50,000" (Comma separated, no decimals).
 - **Dates:** DD/MM/YYYY.
 - **Inputs:** Large padding (`p-4`), clear borders (`border-slate-300`).
+- **Patient IDs:** Database stores `file_number` (int). UI MUST display as `KELH-1001` using `formatPatientId`.
 
 ## 4. Coding Standards
 - **Supabase Client:** Import from `@/utils/supabase/client`.
