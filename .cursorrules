@@ -1,0 +1,26 @@
+# KELH Manager V2 - Project Rules
+
+## 1. Project Context
+- **App Name:** KELH Manager (Kampala Eye & Lasik Hospital).
+- **Users:** Receptionists (Low digital literacy) and Managers.
+- **Device:** Android Tablets/Phones (Touch-first UI).
+- **Network:** Unstable (Uganda). Optimistic UI required.
+
+## 2. Tech Stack
+- **Framework:** Next.js 15 (App Router).
+- **Directory:** ALWAYS use the `src/` directory.
+- **Styling:** Tailwind CSS.
+- **Database:** Supabase (PostgreSQL).
+- **Icons:** `lucide-react`.
+
+## 3. Design Principles (Non-Negotiable)
+- **Light Mode Only:** `bg-slate-50`, `text-slate-900`. No Dark Mode.
+- **Big Buttons:** Primary actions must be massive (h-16+), high contrast.
+- **Currency:** "UGX 50,000" (Comma separated, no decimals).
+- **Dates:** DD/MM/YYYY.
+- **Inputs:** Large padding (`p-4`), clear borders (`border-slate-300`).
+
+## 4. Coding Standards
+- **Supabase Client:** Import from `@/utils/supabase/client`.
+- **Constants:** Import lists from `@/lib/constants`.
+- **Error Handling:** Wrap DB calls in try/catch. Show specific error messages.
