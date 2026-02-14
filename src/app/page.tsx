@@ -18,7 +18,7 @@ interface LedgerRecord {
   created_at: string;
   patients: {
     id: number;
-    name: string;
+    full_name: string;
     created_at: string;
   } | null;
 }
@@ -81,10 +81,27 @@ export default function Home() {
     try {
       setLoading(true);
       const supabase = createClient();
+      
+      // Check if Supabase is properly configured
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      
+      if (!supabaseUrl || !supabaseKey) {
+        console.error('Supabase configuration missing:', {
+          hasUrl: !!supabaseUrl,
+          hasKey: !!supabaseKey
+        });
+        return;
+      }
+
       const { start, end } = getDateRange();
 
       // Fetch ledger records with patient data
-      const { data: ledgerData, error: ledgerError } = await supabase
+      // First, try with patient join
+      let ledgerData: LedgerRecord[] | null = null;
+      let ledgerError = null;
+      
+      const ledgerQuery = await supabase
         .from('ledger')
         .select(`
           id,
@@ -96,7 +113,7 @@ export default function Home() {
           created_at,
           patients (
             id,
-            name,
+            full_name,
             created_at
           )
         `)
@@ -104,9 +121,57 @@ export default function Home() {
         .lte('created_at', end.toISOString())
         .order('created_at', { ascending: false });
 
+      ledgerData = ledgerQuery.data;
+      ledgerError = ledgerQuery.error;
+
+      // If there's an error with the join, try without it
       if (ledgerError) {
-        console.error('Error fetching ledger data:', ledgerError);
-        return;
+        console.warn('Error fetching ledger with patient join, trying without:', {
+          message: ledgerError.message,
+          details: ledgerError.details,
+          hint: ledgerError.hint,
+          code: ledgerError.code
+        });
+
+        const simpleLedgerQuery = await supabase
+          .from('ledger')
+          .select('id, transaction_type, payment_method, amount, patient_id, description, created_at')
+          .gte('created_at', start.toISOString())
+          .lte('created_at', end.toISOString())
+          .order('created_at', { ascending: false });
+
+        ledgerData = simpleLedgerQuery.data as LedgerRecord[];
+        ledgerError = simpleLedgerQuery.error;
+
+        if (ledgerError) {
+          console.error('Error fetching ledger data:', {
+            message: ledgerError.message,
+            details: ledgerError.details,
+            hint: ledgerError.hint,
+            code: ledgerError.code,
+            full: ledgerError
+          });
+          return;
+        }
+
+        // If we got data without the join, fetch patient names separately
+        if (ledgerData) {
+          const patientIds = [...new Set(ledgerData.filter(r => r.patient_id).map(r => r.patient_id))];
+          if (patientIds.length > 0) {
+            const { data: patientsData } = await supabase
+              .from('patients')
+              .select('id, full_name, created_at')
+              .in('id', patientIds);
+
+            if (patientsData) {
+              const patientMap = new Map(patientsData.map(p => [p.id, p]));
+              ledgerData = ledgerData.map(record => ({
+                ...record,
+                patients: record.patient_id ? patientMap.get(record.patient_id) || null : null
+              }));
+            }
+          }
+        }
       }
 
       const records = (ledgerData || []) as LedgerRecord[];
@@ -160,7 +225,12 @@ export default function Home() {
       // Set recent activity (last 5 records)
       setRecentActivity(records.slice(0, 5));
     } catch (error) {
-      console.error('Error fetching dashboard data:', error);
+      console.error('Error fetching dashboard data:', {
+        error,
+        errorType: typeof error,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        errorStack: error instanceof Error ? error.stack : undefined
+      });
     } finally {
       setLoading(false);
     }
@@ -326,7 +396,7 @@ export default function Home() {
                           <span className="text-base font-medium text-slate-900 truncate">
                             {record.transaction_type === 'EXPENSE' 
                               ? record.description 
-                              : record.patients?.name || 'Unknown Patient'}
+                              : record.patients?.full_name || 'Unknown Patient'}
                           </span>
                         </div>
                         <div className="flex items-center gap-3 shrink-0">
