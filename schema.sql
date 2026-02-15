@@ -5,12 +5,17 @@
 -- DROP TABLE IF EXISTS ledger CASCADE;
 -- DROP TABLE IF EXISTS patients CASCADE;
 
+-- Create sequence for file numbers (KELH-1001, KELH-1002, etc.)
+CREATE SEQUENCE IF NOT EXISTS patients_file_number_seq START 1001;
+
 -- Create patients table
 CREATE TABLE IF NOT EXISTS patients (
   id BIGSERIAL PRIMARY KEY,
+  file_number INTEGER UNIQUE NOT NULL DEFAULT nextval('patients_file_number_seq'),
   full_name TEXT NOT NULL,
   age INTEGER,
   phone TEXT,
+  referral_source TEXT,
   address TEXT,
   medical_history TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -24,6 +29,8 @@ CREATE TABLE IF NOT EXISTS ledger (
   payment_method TEXT NOT NULL,
   amount NUMERIC(10, 2) NOT NULL,
   patient_id BIGINT REFERENCES patients(id) ON DELETE SET NULL,
+  service_category TEXT,
+  doctor TEXT,
   description TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
