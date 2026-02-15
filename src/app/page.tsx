@@ -265,7 +265,7 @@ export default function Home() {
         return workingDate.toISOString().split('T')[0];
       };
       
-      // Categorize patients as New or Returning based on working days
+      // Categorize patients - can be BOTH new AND returning in same timeframe
       uniquePatients.forEach((patientId) => {
         const timestamps = patientVisitTimestamps.get(patientId) || [];
         const patientRecord = records.find(r => r.patient_id === patientId && r.patients);
@@ -285,20 +285,23 @@ export default function Home() {
           const patientCreatedDate = new Date(patientCreatedAt.getFullYear(), patientCreatedAt.getMonth(), patientCreatedAt.getDate());
           const startDate = new Date(start.getFullYear(), start.getMonth(), start.getDate());
           
-          // Patient is NEW if they were created DURING the timeframe
-          // Patient is RETURNING if they were created BEFORE the timeframe
+          // Check if patient is NEW (profile created in this timeframe)
           const isNewPatient = patientCreatedDate >= startDate;
           
           if (isNewPatient) {
-            // New patient (profile created in this timeframe)
+            // Patient profile created during this timeframe
             newPatientIds.add(patientId);
             
             // Only track social media for NEW patients
             if (patientRecord.patients.referral_source === 'Social Media') {
               socialMediaReferralIds.add(patientId);
             }
-          } else {
-            // Returning patient (profile existed before timeframe, visiting now)
+          }
+          
+          // Check if patient is RETURNING (came on 2+ different working days)
+          // A patient can be BOTH new AND returning in the same timeframe!
+          // Example: Created Monday, came back Wednesday = both new file + returning patient
+          if (uniqueWorkingDays >= 2) {
             returningPatientIds.add(patientId);
           }
         }
