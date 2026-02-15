@@ -28,11 +28,14 @@ interface DashboardMetrics {
   cashRevenue: number;
   digitalRevenue: number;
   availableCash: number;
+  availableDigital: number;
   totalPatients: number;
   newPatients: number;
   returningPatients: number;
   totalExpenses: number;
   expenseCount: number;
+  cashExpenses: number;
+  digitalExpenses: number;
 }
 
 export default function Home() {
@@ -42,14 +45,18 @@ export default function Home() {
     cashRevenue: 0,
     digitalRevenue: 0,
     availableCash: 0,
+    availableDigital: 0,
     totalPatients: 0,
     newPatients: 0,
     returningPatients: 0,
     totalExpenses: 0,
     expenseCount: 0,
+    cashExpenses: 0,
+    digitalExpenses: 0,
   });
   const [recentActivity, setRecentActivity] = useState<LedgerRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedExpense, setSelectedExpense] = useState<LedgerRecord | null>(null);
 
   useEffect(() => {
     fetchDashboardData();
@@ -185,6 +192,7 @@ export default function Home() {
       let cashRevenue = 0;
       let digitalRevenue = 0;
       let cashExpenses = 0;
+      let digitalExpenses = 0;
       let totalExpenses = 0;
       let expenseCount = 0;
       const uniquePatients = new Set<number>();
@@ -201,9 +209,12 @@ export default function Home() {
         } else if (record.transaction_type === 'EXPENSE') {
           totalExpenses += record.amount;
           expenseCount++;
-          // Track cash expenses for available cash calculation
+          // Track cash vs digital expenses
           if (record.payment_method === 'Cash') {
             cashExpenses += record.amount;
+          } else {
+            // MoMo, Airtel Money, Bank are all digital
+            digitalExpenses += record.amount;
           }
         }
 
@@ -224,6 +235,9 @@ export default function Home() {
       // Calculate available cash (cash income - cash expenses)
       const availableCash = cashRevenue - cashExpenses;
       
+      // Calculate available digital (digital income - digital expenses)
+      const availableDigital = digitalRevenue - digitalExpenses;
+      
       // Calculate returning patients (total patients - new patients)
       const returningPatients = uniquePatients.size - newPatientIds.size;
 
@@ -232,11 +246,14 @@ export default function Home() {
         cashRevenue,
         digitalRevenue,
         availableCash,
+        availableDigital,
         totalPatients: uniquePatients.size,
         newPatients: newPatientIds.size,
         returningPatients,
         totalExpenses,
         expenseCount,
+        cashExpenses,
+        digitalExpenses,
       });
 
       // Set recent activity (last 5 records)
@@ -362,15 +379,18 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Available Cash (NEW) */}
+              {/* Available Balances */}
               <div className="bg-green-50 border-2 border-green-200 rounded-xl p-6">
-                <h3 className="text-sm font-medium text-green-700 mb-2">Available Cash</h3>
+                <h3 className="text-sm font-medium text-green-700 mb-2">Available Balances</h3>
                 <p className="text-3xl font-bold text-green-600 mb-3">
                   {formatCurrency(metrics.availableCash)}
                 </p>
-                <div className="text-sm">
+                <div className="text-sm space-y-1">
                   <p className="text-green-700">
                     Cash on hand
+                  </p>
+                  <p className="text-blue-700 font-semibold">
+                    Digital: {formatCurrency(metrics.availableDigital)}
                   </p>
                 </div>
               </div>
@@ -397,9 +417,15 @@ export default function Home() {
                 <p className="text-3xl font-bold text-red-600 mb-3">
                   {formatCurrency(metrics.totalExpenses)}
                 </p>
-                <div className="text-sm">
+                <div className="text-sm space-y-1">
                   <p className="text-slate-600">
                     <span className="font-semibold">{metrics.expenseCount}</span> Transactions
+                  </p>
+                  <p className="text-slate-600">
+                    Cash: <span className="font-semibold">{formatCurrency(metrics.cashExpenses)}</span>
+                  </p>
+                  <p className="text-slate-600">
+                    Digital: <span className="font-semibold">{formatCurrency(metrics.digitalExpenses)}</span>
                   </p>
                 </div>
               </div>
@@ -413,46 +439,113 @@ export default function Home() {
                 <p className="text-slate-600 text-center py-8">No recent activity for this timeframe.</p>
               ) : (
                 <div className="space-y-2">
-                  {recentActivity.map((record) => (
-                    <Link
-                      key={record.id}
-                      href={record.patient_id ? `/patients/${record.patient_id}` : '#'}
-                      className={`block bg-white rounded-lg p-4 border border-slate-200 transition-colors ${
-                        record.patient_id ? 'hover:border-blue-400 hover:shadow-md cursor-pointer' : 'cursor-default'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-4 flex-1 min-w-0">
-                          <span className="text-sm font-mono text-slate-600 whitespace-nowrap">
-                            {formatTime(record.created_at)}
-                          </span>
-                          <span className="text-base font-medium text-slate-900 truncate">
-                            {record.transaction_type === 'EXPENSE' 
-                              ? record.description 
-                              : record.patients?.full_name || 'Unknown Patient'}
-                          </span>
+                  {recentActivity.map((record) => {
+                    const isExpense = record.transaction_type === 'EXPENSE';
+                    const isClickable = isExpense || record.patient_id;
+                    
+                    const handleClick = (e: React.MouseEvent) => {
+                      if (isExpense) {
+                        e.preventDefault();
+                        setSelectedExpense(record);
+                      }
+                      // For INCOME with patient_id, the Link will handle navigation
+                    };
+
+                    return (
+                      <Link
+                        key={record.id}
+                        href={record.patient_id ? `/patients/${record.patient_id}` : '#'}
+                        onClick={handleClick}
+                        className={`block bg-white rounded-lg p-4 border border-slate-200 transition-colors ${
+                          isClickable ? 'hover:border-blue-400 hover:shadow-md cursor-pointer' : 'cursor-default'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-4 flex-1 min-w-0">
+                            <span className="text-sm font-mono text-slate-600 whitespace-nowrap">
+                              {formatTime(record.created_at)}
+                            </span>
+                            <span className="text-base font-medium text-slate-900 truncate">
+                              {isExpense 
+                                ? record.description 
+                                : record.patients?.full_name || 'Unknown Patient'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <span className={`text-lg font-bold ${
+                              record.transaction_type === 'INCOME' ? 'text-green-600' : 'text-red-600'
+                            }`}>
+                              {formatCurrency(record.amount)}
+                            </span>
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
+                              getPaymentMethodColor(record.payment_method)
+                            }`}>
+                              {record.payment_method}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3 shrink-0">
-                          <span className={`text-lg font-bold ${
-                            record.transaction_type === 'INCOME' ? 'text-green-600' : 'text-red-600'
-                          }`}>
-                            {formatCurrency(record.amount)}
-                          </span>
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
-                            getPaymentMethodColor(record.payment_method)
-                          }`}>
-                            {record.payment_method}
-                          </span>
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
+                      </Link>
+                    );
+                  })}
                 </div>
               )}
             </div>
           </>
         )}
       </div>
+
+      {/* Expense Detail Modal */}
+      {selectedExpense && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+          onClick={() => setSelectedExpense(null)}
+        >
+          <div 
+            className="bg-white rounded-lg max-w-md w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <TrendingDown className="text-red-600" size={32} />
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900 mb-2">Expense Details</h2>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div className="bg-slate-50 rounded-lg p-4">
+                <p className="text-sm text-slate-600 mb-1">Description</p>
+                <p className="text-lg font-semibold text-slate-900">{selectedExpense.description}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-slate-50 rounded-lg p-4">
+                  <p className="text-sm text-slate-600 mb-1">Amount</p>
+                  <p className="text-xl font-bold text-red-600">{formatCurrency(selectedExpense.amount)}</p>
+                </div>
+                
+                <div className="bg-slate-50 rounded-lg p-4">
+                  <p className="text-sm text-slate-600 mb-1">Payment Method</p>
+                  <p className="text-lg font-semibold text-slate-900">{selectedExpense.payment_method}</p>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 rounded-lg p-4">
+                <p className="text-sm text-slate-600 mb-1">Date & Time</p>
+                <p className="text-lg font-semibold text-slate-900">
+                  {formatDate(selectedExpense.created_at)} at {formatTime(selectedExpense.created_at)}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setSelectedExpense(null)}
+              className="w-full bg-slate-600 hover:bg-slate-700 text-white p-3 rounded-lg font-semibold transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
