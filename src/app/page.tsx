@@ -27,8 +27,10 @@ interface DashboardMetrics {
   totalRevenue: number;
   cashRevenue: number;
   digitalRevenue: number;
+  availableCash: number;
   totalPatients: number;
   newPatients: number;
+  returningPatients: number;
   totalExpenses: number;
   expenseCount: number;
 }
@@ -39,8 +41,10 @@ export default function Home() {
     totalRevenue: 0,
     cashRevenue: 0,
     digitalRevenue: 0,
+    availableCash: 0,
     totalPatients: 0,
     newPatients: 0,
+    returningPatients: 0,
     totalExpenses: 0,
     expenseCount: 0,
   });
@@ -180,6 +184,7 @@ export default function Home() {
       let totalRevenue = 0;
       let cashRevenue = 0;
       let digitalRevenue = 0;
+      let cashExpenses = 0;
       let totalExpenses = 0;
       let expenseCount = 0;
       const uniquePatients = new Set<number>();
@@ -196,6 +201,10 @@ export default function Home() {
         } else if (record.transaction_type === 'EXPENSE') {
           totalExpenses += record.amount;
           expenseCount++;
+          // Track cash expenses for available cash calculation
+          if (record.payment_method === 'Cash') {
+            cashExpenses += record.amount;
+          }
         }
 
         // Track unique patients
@@ -212,12 +221,20 @@ export default function Home() {
         }
       });
 
+      // Calculate available cash (cash income - cash expenses)
+      const availableCash = cashRevenue - cashExpenses;
+      
+      // Calculate returning patients (total patients - new patients)
+      const returningPatients = uniquePatients.size - newPatientIds.size;
+
       setMetrics({
         totalRevenue,
         cashRevenue,
         digitalRevenue,
+        availableCash,
         totalPatients: uniquePatients.size,
         newPatients: newPatientIds.size,
+        returningPatients,
         totalExpenses,
         expenseCount,
       });
@@ -302,7 +319,7 @@ export default function Home() {
               {/* Check-In / Search */}
               <Link
                 href="/patients"
-                className="bg-blue-600 hover:bg-blue-700 text-white rounded-2xl shadow-md p-6 h-32 flex items-center justify-center gap-4 transition-colors"
+                className="bg-green-600 hover:bg-green-700 text-white rounded-2xl shadow-md p-6 h-32 flex items-center justify-center gap-4 transition-colors"
               >
                 <Users size={48} />
                 <span className="text-2xl font-bold text-center">CHECK-IN / SEARCH</span>
@@ -328,7 +345,7 @@ export default function Home() {
             </div>
 
             {/* Section B: Metric Cards - Summary Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
               {/* Revenue (Income) */}
               <div className="bg-slate-100 rounded-xl p-6">
                 <h3 className="text-sm font-medium text-slate-600 mb-2">Revenue (Income)</h3>
@@ -345,15 +362,31 @@ export default function Home() {
                 </div>
               </div>
 
+              {/* Available Cash (NEW) */}
+              <div className="bg-green-50 border-2 border-green-200 rounded-xl p-6">
+                <h3 className="text-sm font-medium text-green-700 mb-2">Available Cash</h3>
+                <p className="text-3xl font-bold text-green-600 mb-3">
+                  {formatCurrency(metrics.availableCash)}
+                </p>
+                <div className="text-sm">
+                  <p className="text-green-700">
+                    Cash on hand
+                  </p>
+                </div>
+              </div>
+
               {/* Patients (Volume) */}
               <div className="bg-slate-100 rounded-xl p-6">
                 <h3 className="text-sm font-medium text-slate-600 mb-2">Patients (Volume)</h3>
                 <p className="text-3xl font-bold text-blue-600 mb-3">
                   {metrics.totalPatients}
                 </p>
-                <div className="text-sm">
+                <div className="space-y-1 text-sm">
                   <p className="text-slate-600">
                     <span className="font-semibold">{metrics.newPatients}</span> New Files
+                  </p>
+                  <p className="text-slate-600">
+                    <span className="font-semibold">{metrics.returningPatients}</span> Returning
                   </p>
                 </div>
               </div>
