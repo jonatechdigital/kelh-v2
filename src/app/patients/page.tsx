@@ -74,7 +74,7 @@ export default function PatientsPage() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Register new patient
+  // Register new patient - handles form submission and duplicate checking
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     
