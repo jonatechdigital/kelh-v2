@@ -105,7 +105,7 @@ export default function PatientsPage() {
       if (phone.trim() && fullName.trim()) {
         const { data: existingPatients, error: checkError } = await supabase
           .from('patients')
-          .select('id, full_name, phone')
+          .select('id, file_number, full_name, phone, age, referral_source')
           .ilike('full_name', fullName.trim())
           .eq('phone', phone.trim());
 
@@ -430,7 +430,7 @@ export default function PatientsPage() {
                 </div>
                 <div>
                   <p className="text-sm text-slate-600">Patient ID</p>
-                  <p className="text-lg font-mono font-semibold text-blue-600">{formatPatientId(duplicatePatient.id)}</p>
+                  <p className="text-lg font-mono font-semibold text-blue-600">{formatPatientId(duplicatePatient.file_number)}</p>
                 </div>
               </div>
             </div>
