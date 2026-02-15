@@ -102,7 +102,7 @@ export default function Home() {
 
       // Fetch ledger records with patient data
       // First, try with patient join
-      let ledgerData: LedgerRecord[] | null = null;
+      let ledgerData: any[] | null = null;
       let ledgerError = null;
       
       const ledgerQuery = await supabase
@@ -144,7 +144,7 @@ export default function Home() {
           .lte('created_at', end.toISOString())
           .order('created_at', { ascending: false });
 
-        ledgerData = simpleLedgerQuery.data as LedgerRecord[];
+        ledgerData = simpleLedgerQuery.data;
         ledgerError = simpleLedgerQuery.error;
 
         if (ledgerError) {
