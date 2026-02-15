@@ -4,7 +4,7 @@ import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { TrendingDown, Loader2, AlertCircle, ArrowLeft, Home } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatNumberWithCommas, parseFormattedNumber } from '@/lib/utils';
 
 // Expense Categories - Keep categories broad
 const EXPENSE_CATEGORIES = [
@@ -47,8 +47,8 @@ export default function NewExpensePage() {
     e.preventDefault();
     setError(null);
 
-    // Validate Amount
-    const amountValue = parseFloat(amount);
+    // Validate Amount - parse formatted number
+    const amountValue = parseFormattedNumber(amount);
     if (isNaN(amountValue) || amountValue <= 0) {
       setError('Amount must be greater than 0');
       return;
@@ -88,6 +88,19 @@ export default function NewExpensePage() {
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handle amount change with comma formatting
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    // Remove any non-digit characters except comma
+    const cleanValue = value.replace(/[^\d]/g, '');
+    // Format with commas
+    if (cleanValue) {
+      setAmount(formatNumberWithCommas(cleanValue));
+    } else {
+      setAmount('');
     }
   };
 
@@ -177,18 +190,16 @@ export default function NewExpensePage() {
             </label>
             <input
               id="amount"
-              type="number"
+              type="text"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={handleAmountChange}
               placeholder="0"
-              min="1"
-              step="1"
               className="w-full p-4 border-2 border-slate-200 rounded-lg text-base focus:border-red-500 focus:outline-none"
               required
             />
-            {amount && parseFloat(amount) > 0 && (
+            {amount && parseFormattedNumber(amount) > 0 && (
               <p className="text-sm text-slate-600 mt-1">
-                {formatCurrency(parseFloat(amount))}
+                {formatCurrency(parseFormattedNumber(amount))}
               </p>
             )}
           </div>

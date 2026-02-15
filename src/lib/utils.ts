@@ -35,6 +35,46 @@ export function formatDate(date: Date | string): string {
   
   return `${day}/${month}/${year}`;
 }
+
+/**
+ * Formats date range for display
+ * @param start - Start date
+ * @param end - End date
+ * @returns Formatted string like "15/02/2026 - 15/02/2026"
+ */
+export function formatDateRange(start: Date, end: Date): string {
+  const startStr = formatDate(start);
+  const endStr = formatDate(end);
+  
+  // If same day, only show one date
+  if (startStr === endStr) {
+    return startStr;
+  }
+  
+  return `${startStr} - ${endStr}`;
+}
+
+/**
+ * Formats a number with commas for thousands separator
+ * @param value - The number to format
+ * @returns Formatted string like "1,000,000"
+ */
+export function formatNumberWithCommas(value: string | number): string {
+  const num = typeof value === 'string' ? value.replace(/,/g, '') : String(value);
+  const parts = num.split('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return parts.join('.');
+}
+
+/**
+ * Parses a formatted number string (with commas) to a number
+ * @param value - The formatted string to parse
+ * @returns The numeric value
+ */
+export function parseFormattedNumber(value: string): number {
+  return parseFloat(value.replace(/,/g, ''));
+}
+
 export function formatPatientId(id: number | null | undefined) {
   if (!id) return 'PENDING'; // For new patients not saved yet
   return `KELH-${id}`;

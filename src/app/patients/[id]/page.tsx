@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, X, FileText, ArrowLeft } from 'lucide-react';
+import { Plus, X, FileText, ArrowLeft, Home } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
-import { formatPatientId, formatCurrency, formatDate } from '@/lib/utils';
+import { formatPatientId, formatCurrency, formatDate, formatNumberWithCommas, parseFormattedNumber } from '@/lib/utils';
 import { SERVICE_CATEGORIES, DOCTORS, PAYMENT_METHODS, type ServiceCategory, type Doctor, type PaymentMethod } from '@/lib/constants';
 
 interface Patient {
@@ -157,7 +157,8 @@ export default function PatientProfilePage({ params }: PageProps) {
   const handleBillingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!amount || parseFloat(amount) <= 0) {
+    const amountValue = parseFormattedNumber(amount);
+    if (!amount || amountValue <= 0) {
       alert('Please enter a valid amount');
       return;
     }
@@ -172,7 +173,7 @@ export default function PatientProfilePage({ params }: PageProps) {
       const insertData: Record<string, any> = {
         transaction_type: 'INCOME',
         patient_id: parseInt(patientId),
-        amount: parseFloat(amount),
+        amount: amountValue,
         payment_method: paymentMethod,
       };
 
@@ -239,6 +240,19 @@ export default function PatientProfilePage({ params }: PageProps) {
     }
   };
 
+  // Handle amount change with comma formatting
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    // Remove any non-digit characters
+    const cleanValue = value.replace(/[^\d]/g, '');
+    // Format with commas
+    if (cleanValue) {
+      setAmount(formatNumberWithCommas(cleanValue));
+    } else {
+      setAmount('');
+    }
+  };
+
   // Reset billing form
   const resetBillingForm = () => {
     setServiceCategory('Consultation');
@@ -281,23 +295,22 @@ export default function PatientProfilePage({ params }: PageProps) {
   return (
     <div className="min-h-screen bg-white">
       <div className="max-w-5xl mx-auto px-4 py-8">
-        {/* Navigation Bar */}
-        <div className="mb-6 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.push('/')}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors"
-            >
-              <ArrowLeft size={20} />
-              <span>Dashboard</span>
-            </button>
-            <button
-              onClick={() => router.push('/patients')}
-              className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors"
-            >
-              <span>Patient Search</span>
-            </button>
-          </div>
+        {/* Navigation Bar - Consistent with other pages */}
+        <div className="mb-6 flex items-center gap-3 bg-white rounded-lg shadow-sm p-4 border-2 border-slate-200">
+          <button
+            onClick={() => router.push('/')}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition-colors font-medium"
+          >
+            <Home size={20} />
+            <span>Dashboard</span>
+          </button>
+          <button
+            onClick={() => router.push('/patients')}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors font-medium"
+          >
+            <ArrowLeft size={20} />
+            <span>Patient Search</span>
+          </button>
         </div>
 
         {/* Patient Header */}
@@ -443,15 +456,18 @@ export default function PatientProfilePage({ params }: PageProps) {
                     Amount (UGX) <span className="text-red-500">*</span>
                   </label>
                   <input
-                    type="number"
+                    type="text"
                     value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
+                    onChange={handleAmountChange}
                     placeholder="Enter amount"
-                    min="0"
-                    step="1"
                     className="w-full p-3 text-lg border-2 border-slate-200 rounded-lg focus:outline-none focus:border-blue-500"
                     required
                   />
+                  {amount && parseFormattedNumber(amount) > 0 && (
+                    <p className="text-sm text-slate-600 mt-1">
+                      {formatCurrency(parseFormattedNumber(amount))}
+                    </p>
+                  )}
                 </div>
 
                 {/* Payment Method */}
