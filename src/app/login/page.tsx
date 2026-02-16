@@ -20,11 +20,11 @@ function SubmitButton() {
 }
 
 export default function LoginPage() {
-  const [state, formAction] = useActionState(
-    async (_prevState: any, formData: FormData) => {
+  const [state, formAction, isPending] = useActionState(
+    async (_prevState: { error: string | null }, formData: FormData) => {
       return await login(formData);
     },
-    { error: null }
+    { error: null as string | null }
   );
 
   return (
