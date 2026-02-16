@@ -373,15 +373,14 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-white p-8">
+    <main className="bg-white">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <header className="mb-8">
-          <h1 className="text-4xl font-bold text-slate-900 mb-2">KELH Manager V2</h1>
-          <p className="text-slate-600">
+        {/* Dashboard Header with Date Range */}
+        <div className="mb-6">
+          <p className="text-lg text-slate-600">
             {dateRange ? formatDateRange(dateRange.start, dateRange.end) : formatDate(new Date())}
           </p>
-        </header>
+        </div>
 
         {/* Timeframe Selector */}
         <div className="mb-6">
