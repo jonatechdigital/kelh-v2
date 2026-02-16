@@ -10,7 +10,8 @@ import {
   Target,
   DollarSign,
   Calendar,
-  Shield
+  Shield,
+  RefreshCw
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -64,6 +65,8 @@ export default function ReportsPage() {
   const [ledgerData, setLedgerData] = useState<LedgerRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   
   // Check admin access on mount
   useEffect(() => {
@@ -89,6 +92,43 @@ export default function ReportsPage() {
     if (isAdmin) {
       fetchData();
     }
+  }, [dateRange, isAdmin]);
+
+  // Real-time subscription for auto-refresh
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    const supabase = createClient();
+    const startDate = getDateRangeFilter();
+
+    // Subscribe to ledger changes
+    const channel = supabase
+      .channel('ledger-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+          schema: 'public',
+          table: 'ledger',
+        },
+        (payload) => {
+          console.log('Ledger data changed:', payload);
+          // Check if the change is within our date range
+          const changeDate = new Date(payload.new?.created_at || payload.old?.created_at);
+          const rangeStart = new Date(startDate);
+          
+          if (changeDate >= rangeStart) {
+            // Refresh data automatically
+            fetchData();
+          }
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [dateRange, isAdmin]);
 
   const getDateRangeFilter = () => {
@@ -131,11 +171,19 @@ export default function ReportsPage() {
       }
 
       setLedgerData(data || []);
+      setLastUpdated(new Date());
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Manual refresh function
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchData();
+    setTimeout(() => setIsRefreshing(false), 500);
   };
 
   // Calculate Financial Metrics
@@ -431,22 +479,40 @@ export default function ReportsPage() {
               <p className="text-slate-600">Manager's Dashboard - Hospital Performance Insights</p>
             </div>
 
-        {/* Date Range Filter */}
-        <div className="mb-6 flex items-center gap-4">
-          <div className="flex items-center gap-2 text-slate-700">
-            <Calendar size={20} />
-            <span className="font-medium">Period:</span>
+        {/* Date Range Filter and Refresh */}
+        <div className="mb-6 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-slate-700">
+              <Calendar size={20} />
+              <span className="font-medium">Period:</span>
+            </div>
+            <select
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value as DateRange)}
+              className="px-4 py-2 border-2 border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-medium"
+            >
+              <option value="this_month">This Month</option>
+              <option value="last_month">Last Month</option>
+              <option value="last_3_months">Last 3 Months</option>
+              <option value="this_year">This Year</option>
+            </select>
           </div>
-          <select
-            value={dateRange}
-            onChange={(e) => setDateRange(e.target.value as DateRange)}
-            className="px-4 py-2 border-2 border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-medium"
-          >
-            <option value="this_month">This Month</option>
-            <option value="last_month">Last Month</option>
-            <option value="last_3_months">Last 3 Months</option>
-            <option value="this_year">This Year</option>
-          </select>
+
+          <div className="flex items-center gap-4">
+            {lastUpdated && (
+              <div className="text-sm text-slate-500">
+                Last updated: {lastUpdated.toLocaleTimeString()}
+              </div>
+            )}
+            <button
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium disabled:opacity-50"
+            >
+              <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
+              {isRefreshing ? 'Refreshing...' : 'Refresh'}
+            </button>
+          </div>
         </div>
 
         {/* View Tabs */}

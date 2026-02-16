@@ -17,6 +17,7 @@ interface LedgerRecord {
   description: string;
   service_category: string | null;
   created_at: string;
+  created_by_email?: string | null;
   patients: {
     id: number;
     full_name: string;
@@ -123,7 +124,7 @@ export default function Home() {
       let ledgerError = null;
       
       const ledgerQuery = await supabase
-        .from('ledger')
+        .from('ledger_with_audit')
         .select(`
           id,
           transaction_type,
@@ -133,6 +134,7 @@ export default function Home() {
           description,
           service_category,
           created_at,
+          created_by_email,
           patients (
             id,
             full_name,
@@ -157,8 +159,8 @@ export default function Home() {
         });
 
         const simpleLedgerQuery = await supabase
-          .from('ledger')
-          .select('id, transaction_type, payment_method, amount, patient_id, description, service_category, created_at')
+          .from('ledger_with_audit')
+          .select('id, transaction_type, payment_method, amount, patient_id, description, service_category, created_at, created_by_email')
           .gte('created_at', start.toISOString())
           .lte('created_at', end.toISOString())
           .order('created_at', { ascending: false });
@@ -658,6 +660,13 @@ export default function Home() {
                   {formatDate(selectedExpense.created_at)} at {formatTime(selectedExpense.created_at)}
                 </p>
               </div>
+
+              {selectedExpense.created_by_email && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <p className="text-sm text-blue-700 mb-1">Recorded By</p>
+                  <p className="text-lg font-semibold text-slate-900">{selectedExpense.created_by_email}</p>
+                </div>
+              )}
             </div>
 
             <button
@@ -718,6 +727,13 @@ export default function Home() {
                 <div className="bg-slate-50 rounded-lg p-4">
                   <p className="text-sm text-slate-600 mb-1">Description</p>
                   <p className="text-base text-slate-900">{selectedPatientTransaction.description}</p>
+                </div>
+              )}
+
+              {selectedPatientTransaction.created_by_email && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <p className="text-sm text-blue-700 mb-1">Added By</p>
+                  <p className="text-lg font-semibold text-slate-900">{selectedPatientTransaction.created_by_email}</p>
                 </div>
               )}
             </div>

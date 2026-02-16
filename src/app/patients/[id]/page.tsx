@@ -25,6 +25,8 @@ interface LedgerEntry {
   amount: number;
   payment_method: string;
   description: string | null;
+  created_by?: string | null;
+  created_by_email?: string | null;
 }
 
 interface PageProps {
@@ -56,6 +58,46 @@ export default function PatientProfilePage({ params }: PageProps) {
       setPatientId(p.id);
     });
   }, [params]);
+
+  // Real-time subscription for ledger updates
+  useEffect(() => {
+    if (!patientId) return;
+
+    const supabase = createClient();
+    const id = parseInt(patientId);
+    if (isNaN(id)) return;
+
+    // Subscribe to ledger changes for this patient
+    const channel = supabase
+      .channel(`patient-${id}-ledger`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'ledger',
+          filter: `patient_id=eq.${id}`,
+        },
+        (payload) => {
+          console.log('Ledger updated for patient:', payload);
+          // Refresh ledger data with user info
+          supabase
+            .from('ledger_with_audit')
+            .select('id, created_at, service_category, doctor, amount, payment_method, description, created_by_email')
+            .eq('patient_id', id)
+            .eq('transaction_type', 'INCOME')
+            .order('created_at', { ascending: false })
+            .then(({ data }) => {
+              if (data) setLedgerHistory(data);
+            });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [patientId]);
 
   // Fetch patient data and ledger history
   useEffect(() => {
@@ -115,10 +157,10 @@ export default function PatientProfilePage({ params }: PageProps) {
         console.log('Patient data loaded successfully:', patientData);
         setPatient(patientData);
 
-        // Fetch ledger history - only request columns that should exist
+        // Fetch ledger history with user information
         const { data: ledgerData, error: ledgerError } = await supabase
-          .from('ledger')
-          .select('id, created_at, service_category, doctor, amount, payment_method, description')
+          .from('ledger_with_audit')
+          .select('id, created_at, service_category, doctor, amount, payment_method, description, created_by_email')
           .eq('patient_id', id)
           .eq('transaction_type', 'INCOME')
           .order('created_at', { ascending: false });
@@ -221,10 +263,10 @@ export default function PatientProfilePage({ params }: PageProps) {
       // Show success modal
       setShowSuccessModal(true);
       
-      // Refresh ledger data in background
+      // Refresh ledger data in background with user info
       const { data: updatedLedger } = await supabase
-        .from('ledger')
-        .select('id, created_at, service_category, doctor, amount, payment_method, description')
+        .from('ledger_with_audit')
+        .select('id, created_at, service_category, doctor, amount, payment_method, description, created_by_email')
         .eq('patient_id', parseInt(patientId))
         .eq('transaction_type', 'INCOME')
         .order('created_at', { ascending: false });
@@ -383,6 +425,9 @@ export default function PatientProfilePage({ params }: PageProps) {
                   <div className="flex items-center gap-4 text-sm text-slate-600">
                     {entry.doctor && <span>Doctor: {entry.doctor}</span>}
                     <span>Payment: {entry.payment_method}</span>
+                    {entry.created_by_email && (
+                      <span className="text-slate-500">• Added by: {entry.created_by_email}</span>
+                    )}
                   </div>
                   {entry.description && (
                     <p className="mt-2 text-sm text-slate-600 italic">
