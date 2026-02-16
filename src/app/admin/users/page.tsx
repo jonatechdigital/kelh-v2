@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Shield, Users as UsersIcon, UserPlus, Trash2, Loader2, Key, Copy, Check, Edit } from 'lucide-react';
-import { createUser, checkIsAdmin, deleteUser, resetUserPassword } from '@/app/actions/users';
+import { createUser, checkIsAdmin, deleteUser, resetUserPassword, updateUserRole } from '@/app/actions/users';
 import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
 
