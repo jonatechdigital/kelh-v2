@@ -111,10 +111,10 @@ export default function ReportsPage() {
           schema: 'public',
           table: 'ledger',
         },
-        (payload) => {
+        (payload: any) => {
           console.log('Ledger data changed:', payload);
           // Check if the change is within our date range
-          const changeDate = new Date(payload.new?.created_at || payload.old?.created_at);
+          const changeDate = new Date((payload.new?.created_at || payload.old?.created_at) as string);
           const rangeStart = new Date(startDate);
           
           if (changeDate >= rangeStart) {

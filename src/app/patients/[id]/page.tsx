@@ -78,7 +78,7 @@ export default function PatientProfilePage({ params }: PageProps) {
           table: 'ledger',
           filter: `patient_id=eq.${id}`,
         },
-        (payload) => {
+        (payload: any) => {
           console.log('Ledger updated for patient:', payload);
           // Refresh ledger data with user info
           supabase
