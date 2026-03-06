@@ -2,38 +2,35 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { 
-  ArrowLeft, 
-  Home, 
-  TrendingUp, 
-  Users, 
+import {
+  ArrowLeft,
+  TrendingUp,
+  Users,
   Target,
   DollarSign,
-  Calendar,
   Shield,
-  RefreshCw
+  RefreshCw,
+  BarChart2,
 } from 'lucide-react';
-import { 
-  AreaChart, 
-  Area, 
-  BarChart, 
-  Bar, 
-  PieChart, 
-  Pie, 
+import {
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
   Cell,
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   Legend,
-  ResponsiveContainer 
+  ResponsiveContainer,
 } from 'recharts';
 import { createClient } from '@/utils/supabase/client';
 import { formatCurrency } from '@/lib/utils';
-import { DOCTORS, PAYMENT_METHODS } from '@/lib/constants';
 import { checkIsAdmin } from '@/app/actions/users';
 
-// Types
 interface LedgerRecord {
   id: string;
   created_at: string;
@@ -44,22 +41,23 @@ interface LedgerRecord {
   doctor: string | null;
   service_category: string | null;
   patient_id: number | null;
-  patients: {
-    age: number | null;
-    referral_source: string | null;
-  } | null;
+  patients: { age: number | null; referral_source: string | null } | null;
 }
 
 type DateRange = 'this_month' | 'last_month' | 'last_3_months' | 'this_year';
 type ViewTab = 'financial' | 'performance' | 'growth' | 'services';
 
-// Chart Colors
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+const IOS_COLORS = ['#007AFF', '#34C759', '#FF9500', '#FF3B30', '#AF52DE', '#5AC8FA'];
+
+const TAB_CONFIG: { id: ViewTab; label: string; icon: typeof DollarSign }[] = [
+  { id: 'financial', label: 'Financial', icon: DollarSign },
+  { id: 'performance', label: 'Staff', icon: Users },
+  { id: 'growth', label: 'Growth', icon: Target },
+  { id: 'services', label: 'Services', icon: TrendingUp },
+];
 
 export default function ReportsPage() {
   const router = useRouter();
-  
-  // State
   const [dateRange, setDateRange] = useState<DateRange>('this_month');
   const [currentView, setCurrentView] = useState<ViewTab>('financial');
   const [ledgerData, setLedgerData] = useState<LedgerRecord[]>([]);
@@ -67,109 +65,61 @@ export default function ReportsPage() {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  
-  // Check admin access on mount
-  useEffect(() => {
-    checkAdminAccess();
-  }, []);
+
+  useEffect(() => { checkAdminAccess(); }, []);
 
   const checkAdminAccess = async () => {
     try {
       const adminStatus = await checkIsAdmin();
       setIsAdmin(adminStatus);
-      if (!adminStatus) {
-        setTimeout(() => router.push('/'), 2000);
-      }
+      if (!adminStatus) setTimeout(() => router.push('/'), 2000);
     } catch (error) {
       console.error('Error checking admin:', error);
       setIsAdmin(false);
       setTimeout(() => router.push('/'), 2000);
     }
   };
-  
-  // Fetch data based on date range
+
   useEffect(() => {
-    if (isAdmin) {
-      fetchData();
-    }
+    if (isAdmin) fetchData();
   }, [dateRange, isAdmin]);
 
-  // Real-time subscription for auto-refresh
   useEffect(() => {
     if (!isAdmin) return;
-
     const supabase = createClient();
-    const startDate = getDateRangeFilter();
-
-    // Subscribe to ledger changes
     const channel = supabase
       .channel('ledger-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
-          schema: 'public',
-          table: 'ledger',
-        },
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ledger' },
         (payload: any) => {
-          console.log('Ledger data changed:', payload);
-          // Check if the change is within our date range
           const changeDate = new Date((payload.new?.created_at || payload.old?.created_at) as string);
-          const rangeStart = new Date(startDate);
-          
-          if (changeDate >= rangeStart) {
-            // Refresh data automatically
-            fetchData();
-          }
+          if (changeDate >= new Date(getDateRangeFilter())) fetchData();
         }
       )
       .subscribe();
-
-    // Cleanup subscription on unmount
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [dateRange, isAdmin]);
 
   const getDateRangeFilter = () => {
     const now = new Date();
-    let startDate = new Date();
-    
     switch (dateRange) {
-      case 'this_month':
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        break;
-      case 'last_month':
-        startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        break;
-      case 'last_3_months':
-        startDate = new Date(now.getFullYear(), now.getMonth() - 3, 1);
-        break;
-      case 'this_year':
-        startDate = new Date(now.getFullYear(), 0, 1);
-        break;
+      case 'this_month': return new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      case 'last_month': return new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
+      case 'last_3_months': return new Date(now.getFullYear(), now.getMonth() - 3, 1).toISOString();
+      case 'this_year': return new Date(now.getFullYear(), 0, 1).toISOString();
     }
-    
-    return startDate.toISOString();
   };
 
   const fetchData = async () => {
     setLoading(true);
     try {
       const supabase = createClient();
-      const startDate = getDateRangeFilter();
-      
       const { data, error } = await supabase
         .from('ledger')
         .select('*, patient_id, patients(age, referral_source)')
-        .gte('created_at', startDate)
+        .gte('created_at', getDateRangeFilter())
         .order('created_at', { ascending: true });
 
-      if (error) {
-        console.error('Error fetching ledger data:', error);
-        return;
-      }
-
+      if (error) { console.error('Error fetching ledger data:', error); return; }
       setLedgerData(data || []);
       setLastUpdated(new Date());
     } catch (error) {
@@ -179,247 +129,116 @@ export default function ReportsPage() {
     }
   };
 
-  // Manual refresh function
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
     await fetchData();
     setTimeout(() => setIsRefreshing(false), 500);
   };
 
-  // Calculate Financial Metrics
   const calculateFinancialMetrics = () => {
-    const totalIncome = ledgerData
-      .filter(r => r.transaction_type === 'INCOME')
-      .reduce((sum, r) => sum + r.amount, 0);
-    
-    const totalExpense = ledgerData
-      .filter(r => r.transaction_type === 'EXPENSE')
-      .reduce((sum, r) => sum + r.amount, 0);
-    
-    const netProfit = totalIncome - totalExpense;
-    
-    return { totalIncome, totalExpense, netProfit };
+    const totalIncome = ledgerData.filter(r => r.transaction_type === 'INCOME').reduce((s, r) => s + r.amount, 0);
+    const totalExpense = ledgerData.filter(r => r.transaction_type === 'EXPENSE').reduce((s, r) => s + r.amount, 0);
+    return { totalIncome, totalExpense, netProfit: totalIncome - totalExpense };
   };
 
-  // Income vs Expense Trend (Daily)
   const getIncomeExpenseTrend = () => {
-    const dailyData: { [key: string]: { income: number; expense: number } } = {};
-    
+    const daily: { [key: string]: { income: number; expense: number } } = {};
     ledgerData.forEach(record => {
-      const date = new Date(record.created_at).toLocaleDateString('en-GB', { 
-        day: '2-digit', 
-        month: 'short' 
-      });
-      
-      if (!dailyData[date]) {
-        dailyData[date] = { income: 0, expense: 0 };
-      }
-      
-      if (record.transaction_type === 'INCOME') {
-        dailyData[date].income += record.amount;
-      } else {
-        dailyData[date].expense += record.amount;
-      }
+      const date = new Date(record.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+      if (!daily[date]) daily[date] = { income: 0, expense: 0 };
+      if (record.transaction_type === 'INCOME') daily[date].income += record.amount;
+      else daily[date].expense += record.amount;
     });
-    
-    return Object.entries(dailyData).map(([date, data]) => ({
-      date,
-      income: data.income,
-      expense: data.expense
-    }));
+    return Object.entries(daily).map(([date, data]) => ({ date, ...data }));
   };
 
-  // Income by Payment Method
   const getIncomeByPaymentMethod = () => {
-    const paymentData: { [key: string]: number } = {};
-    
-    ledgerData
-      .filter(r => r.transaction_type === 'INCOME' && r.payment_method)
-      .forEach(record => {
-        const method = record.payment_method!;
-        paymentData[method] = (paymentData[method] || 0) + record.amount;
-      });
-    
-    return Object.entries(paymentData).map(([name, value]) => ({
-      name,
-      value
-    }));
+    const d: { [k: string]: number } = {};
+    ledgerData.filter(r => r.transaction_type === 'INCOME' && r.payment_method)
+      .forEach(r => { d[r.payment_method!] = (d[r.payment_method!] || 0) + r.amount; });
+    return Object.entries(d).map(([name, value]) => ({ name, value }));
   };
 
-  // Expense Breakdown by Category
   const getExpenseByCategory = () => {
-    const categoryData: { [key: string]: number } = {};
-    
-    ledgerData
-      .filter(r => r.transaction_type === 'EXPENSE' && r.description)
-      .forEach(record => {
-        // Extract category from description (format: [Category] description)
-        const match = record.description!.match(/^\[([^\]]+)\]/);
-        if (match) {
-          const category = match[1];
-          categoryData[category] = (categoryData[category] || 0) + record.amount;
-        }
+    const d: { [k: string]: number } = {};
+    ledgerData.filter(r => r.transaction_type === 'EXPENSE' && r.description)
+      .forEach(r => {
+        const match = r.description!.match(/^\[([^\]]+)\]/);
+        if (match) d[match[1]] = (d[match[1]] || 0) + r.amount;
       });
-    
-    return Object.entries(categoryData)
-      .map(([category, amount]) => ({ category, amount }))
-      .sort((a, b) => b.amount - a.amount);
+    return Object.entries(d).map(([category, amount]) => ({ category, amount })).sort((a, b) => b.amount - a.amount);
   };
 
-  // Revenue by Doctor
   const getRevenueByDoctor = () => {
-    const doctorRevenue: { [key: string]: number } = {};
-    
-    ledgerData
-      .filter(r => r.transaction_type === 'INCOME' && r.doctor && r.doctor !== 'None')
-      .forEach(record => {
-        const doctor = record.doctor!;
-        doctorRevenue[doctor] = (doctorRevenue[doctor] || 0) + record.amount;
-      });
-    
-    return Object.entries(doctorRevenue)
-      .map(([doctor, revenue]) => ({ doctor, revenue }))
-      .sort((a, b) => b.revenue - a.revenue);
+    const d: { [k: string]: number } = {};
+    ledgerData.filter(r => r.transaction_type === 'INCOME' && r.doctor && r.doctor !== 'None')
+      .forEach(r => { d[r.doctor!] = (d[r.doctor!] || 0) + r.amount; });
+    return Object.entries(d).map(([doctor, revenue]) => ({ doctor, revenue })).sort((a, b) => b.revenue - a.revenue);
   };
 
-  // Patient Volume by Doctor
   const getPatientVolumeByDoctor = () => {
-    const doctorPatients: { [key: string]: Set<string> } = {};
-    
-    ledgerData
-      .filter(r => r.transaction_type === 'INCOME' && r.doctor && r.doctor !== 'None')
-      .forEach(record => {
-        const doctor = record.doctor!;
-        if (!doctorPatients[doctor]) {
-          doctorPatients[doctor] = new Set();
-        }
-        // Use record ID as proxy for patient visits
-        doctorPatients[doctor].add(record.id);
+    const d: { [k: string]: Set<string> } = {};
+    ledgerData.filter(r => r.transaction_type === 'INCOME' && r.doctor && r.doctor !== 'None')
+      .forEach(r => {
+        if (!d[r.doctor!]) d[r.doctor!] = new Set();
+        d[r.doctor!].add(r.id);
       });
-    
-    return Object.entries(doctorPatients)
-      .map(([doctor, visits]) => ({ doctor, patients: visits.size }))
-      .sort((a, b) => b.patients - a.patients);
+    return Object.entries(d).map(([doctor, visits]) => ({ doctor, patients: visits.size })).sort((a, b) => b.patients - a.patients);
   };
 
-  // Revenue by Referral Source
   const getRevenueByReferralSource = () => {
-    const referralRevenue: { [key: string]: number } = {};
-    
-    ledgerData
-      .filter(r => r.transaction_type === 'INCOME' && r.patients?.referral_source)
-      .forEach(record => {
-        const source = record.patients!.referral_source!;
-        referralRevenue[source] = (referralRevenue[source] || 0) + record.amount;
-      });
-    
-    return Object.entries(referralRevenue)
-      .map(([source, revenue]) => ({ source, revenue }))
-      .sort((a, b) => b.revenue - a.revenue);
+    const d: { [k: string]: number } = {};
+    ledgerData.filter(r => r.transaction_type === 'INCOME' && r.patients?.referral_source)
+      .forEach(r => { const s = r.patients!.referral_source!; d[s] = (d[s] || 0) + r.amount; });
+    return Object.entries(d).map(([source, revenue]) => ({ source, revenue })).sort((a, b) => b.revenue - a.revenue);
   };
 
-  // Patient Demographics by Referral Source
   const getPatientDemographics = () => {
-    const demographics: { [key: string]: number } = {};
-    
-    ledgerData
-      .filter(r => r.transaction_type === 'INCOME' && r.patients?.referral_source)
-      .forEach(record => {
-        const source = record.patients!.referral_source!;
-        demographics[source] = (demographics[source] || 0) + 1;
-      });
-    
-    return Object.entries(demographics).map(([name, value]) => ({
-      name,
-      value
-    }));
+    const d: { [k: string]: number } = {};
+    ledgerData.filter(r => r.transaction_type === 'INCOME' && r.patients?.referral_source)
+      .forEach(r => { const s = r.patients!.referral_source!; d[s] = (d[s] || 0) + 1; });
+    return Object.entries(d).map(([name, value]) => ({ name, value }));
   };
 
-  // New vs Returning Patients
   const getNewVsReturningPatients = () => {
     const patientIds = new Set<number>();
-    const newPatients = new Set<number>();
-    const returningPatients = new Set<number>();
-    
-    // Count unique patients in period
-    ledgerData.filter(r => r.transaction_type === 'INCOME' && r.patient_id).forEach(r => {
-      patientIds.add(r.patient_id!);
-    });
-    
-    // For each patient, check if first visit ever is in this period
-    patientIds.forEach(patientId => {
-      const patientRecords = ledgerData
-        .filter(r => r.patient_id === patientId)
-        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-      
-      if (patientRecords.length > 0) {
-        const firstVisit = new Date(patientRecords[0].created_at);
-        const periodStart = new Date(getDateRangeFilter());
-        
-        if (firstVisit >= periodStart) {
-          newPatients.add(patientId);
-        } else {
-          returningPatients.add(patientId);
-        }
+    const newP = new Set<number>(), retP = new Set<number>();
+    ledgerData.filter(r => r.transaction_type === 'INCOME' && r.patient_id).forEach(r => patientIds.add(r.patient_id!));
+    patientIds.forEach(id => {
+      const recs = ledgerData.filter(r => r.patient_id === id).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      if (recs.length > 0) {
+        new Date(recs[0].created_at) >= new Date(getDateRangeFilter()) ? newP.add(id) : retP.add(id);
       }
     });
-    
-    return {
-      new: newPatients.size,
-      returning: returningPatients.size,
-      total: patientIds.size
-    };
+    return { new: newP.size, returning: retP.size, total: patientIds.size };
   };
 
-  // Revenue by Service Category
   const getRevenueByServiceCategory = () => {
-    const serviceRevenue: { [key: string]: number } = {};
-    
-    ledgerData
-      .filter(r => r.transaction_type === 'INCOME' && r.service_category)
-      .forEach(record => {
-        const category = record.service_category!;
-        serviceRevenue[category] = (serviceRevenue[category] || 0) + record.amount;
-      });
-    
-    return Object.entries(serviceRevenue)
-      .map(([category, revenue]) => ({ category, revenue }))
-      .sort((a, b) => b.revenue - a.revenue);
+    const d: { [k: string]: number } = {};
+    ledgerData.filter(r => r.transaction_type === 'INCOME' && r.service_category)
+      .forEach(r => { d[r.service_category!] = (d[r.service_category!] || 0) + r.amount; });
+    return Object.entries(d).map(([category, revenue]) => ({ category, revenue })).sort((a, b) => b.revenue - a.revenue);
   };
 
-  // Patient Volume by Service Category
   const getPatientVolumeByService = () => {
-    const servicePatients: { [key: string]: number } = {};
-    
-    ledgerData
-      .filter(r => r.transaction_type === 'INCOME' && r.service_category)
-      .forEach(record => {
-        const category = record.service_category!;
-        servicePatients[category] = (servicePatients[category] || 0) + 1;
-      });
-    
-    return Object.entries(servicePatients)
-      .map(([category, count]) => ({ category, count }))
-      .sort((a, b) => b.count - a.count);
+    const d: { [k: string]: number } = {};
+    ledgerData.filter(r => r.transaction_type === 'INCOME' && r.service_category)
+      .forEach(r => { d[r.service_category!] = (d[r.service_category!] || 0) + 1; });
+    return Object.entries(d).map(([category, count]) => ({ category, count })).sort((a, b) => b.count - a.count);
   };
 
-  // New vs Returning Patient Distribution for Pie Chart
   const getPatientTypeDistribution = () => {
     const stats = getNewVsReturningPatients();
-    return [
-      { name: 'New Patients', value: stats.new },
-      { name: 'Returning Patients', value: stats.returning }
-    ];
+    return [{ name: 'New Patients', value: stats.new }, { name: 'Returning Patients', value: stats.returning }];
   };
 
-  // Custom Tooltip for Currency
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white p-3 border-2 border-slate-200 rounded-lg shadow-lg">
-          <p className="font-semibold text-slate-900 mb-1">{label}</p>
-          {payload.map((entry: any, index: number) => (
-            <p key={index} style={{ color: entry.color }} className="text-sm">
+        <div className="rounded-xl p-3 shadow-lg" style={{ backgroundColor: 'var(--ios-card)', border: '0.5px solid var(--ios-separator-opaque)' }}>
+          <p className="text-xs font-semibold mb-1" style={{ color: 'var(--ios-label-secondary)' }}>{label}</p>
+          {payload.map((entry: any, i: number) => (
+            <p key={i} className="text-sm font-semibold" style={{ color: entry.color }}>
               {entry.name}: {formatCurrency(entry.value)}
             </p>
           ))}
@@ -431,479 +250,357 @@ export default function ReportsPage() {
 
   const metrics = calculateFinancialMetrics();
 
+  if (isAdmin === null || (loading && isAdmin === null)) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-10 w-10 border-2 border-t-transparent mx-auto mb-3"
+            style={{ borderColor: 'var(--ios-blue)', borderTopColor: 'transparent' }} />
+          <p className="text-sm" style={{ color: 'var(--ios-label-secondary)' }}>Verifying access…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isAdmin === false) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <div className="ios-card rounded-2xl p-8 max-w-sm text-center">
+          <Shield size={40} className="mx-auto mb-4" style={{ color: 'var(--ios-red)' }} />
+          <h2 className="text-lg font-bold mb-2" style={{ color: 'var(--ios-label)' }}>Access Denied</h2>
+          <p className="text-sm" style={{ color: 'var(--ios-label-secondary)' }}>This page is admin-only. Redirecting…</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-white">
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Navigation Bar */}
-        <div className="mb-6 flex items-center gap-3 bg-white rounded-lg shadow-sm p-4 border-2 border-slate-200">
-          <button
-            onClick={() => router.push('/')}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition-colors font-medium"
-          >
-            <Home size={20} />
-            <span>Dashboard</span>
-          </button>
-          <button
-            onClick={() => router.back()}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors font-medium"
-          >
-            <ArrowLeft size={20} />
-            <span>Back</span>
-          </button>
+    <div>
+      {/* Page Header */}
+      <div className="flex items-center gap-3 mb-5">
+        <button
+          onClick={() => router.push('/')}
+          className="w-9 h-9 rounded-full flex items-center justify-center"
+          style={{ backgroundColor: 'var(--ios-fill-tertiary)', color: 'var(--ios-blue)' }}
+        >
+          <ArrowLeft size={18} />
+        </button>
+        <div className="flex-1">
+          <h1 className="text-xl font-bold" style={{ color: 'var(--ios-label)' }}>Reports & Analytics</h1>
+          <p className="text-xs" style={{ color: 'var(--ios-label-secondary)' }}>Hospital Performance Insights</p>
         </div>
+        <button
+          onClick={handleManualRefresh}
+          disabled={isRefreshing}
+          className="w-9 h-9 rounded-full flex items-center justify-center disabled:opacity-40"
+          style={{ backgroundColor: 'rgba(0, 122, 255, 0.1)', color: 'var(--ios-blue)' }}
+        >
+          <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
+        </button>
+      </div>
 
-        {/* Admin Access Check */}
-        {isAdmin === false && (
-          <div className="bg-red-50 border-2 border-red-200 rounded-lg p-8 text-center">
-            <Shield size={48} className="text-red-600 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">Access Denied</h2>
-            <p className="text-slate-600 mb-4">This page is only accessible to administrators.</p>
-            <p className="text-sm text-slate-500">Redirecting to dashboard...</p>
-          </div>
-        )}
-
-        {isAdmin === null && (
-          <div className="flex items-center justify-center py-20">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p className="text-slate-600">Verifying access...</p>
-            </div>
-          </div>
-        )}
-
-        {isAdmin === true && (
-          <>
-            {/* Header */}
-            <div className="mb-8">
-              <h1 className="text-4xl font-bold text-slate-900 mb-2">Reports & Analytics</h1>
-              <p className="text-slate-600">Manager's Dashboard - Hospital Performance Insights</p>
-            </div>
-
-        {/* Date Range Filter and Refresh */}
-        <div className="mb-6 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-slate-700">
-              <Calendar size={20} />
-              <span className="font-medium">Period:</span>
-            </div>
-            <select
-              value={dateRange}
-              onChange={(e) => setDateRange(e.target.value as DateRange)}
-              className="px-4 py-2 border-2 border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 font-medium"
-            >
-              <option value="this_month">This Month</option>
-              <option value="last_month">Last Month</option>
-              <option value="last_3_months">Last 3 Months</option>
-              <option value="this_year">This Year</option>
-            </select>
-          </div>
-
-          <div className="flex items-center gap-4">
-            {lastUpdated && (
-              <div className="text-sm text-slate-500">
-                Last updated: {lastUpdated.toLocaleTimeString()}
-              </div>
-            )}
-            <button
-              onClick={handleManualRefresh}
-              disabled={isRefreshing}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium disabled:opacity-50"
-            >
-              <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
-              {isRefreshing ? 'Refreshing...' : 'Refresh'}
-            </button>
-          </div>
+      {/* Date Range + Last Updated */}
+      <div className="flex items-center gap-3 mb-5">
+        <div className="ios-card rounded-xl px-3 py-2 flex-1">
+          <select
+            value={dateRange}
+            onChange={(e) => setDateRange(e.target.value as DateRange)}
+            className="w-full text-sm bg-transparent border-none outline-none font-medium"
+            style={{ color: 'var(--ios-label)' }}
+          >
+            <option value="this_month">This Month</option>
+            <option value="last_month">Last Month</option>
+            <option value="last_3_months">Last 3 Months</option>
+            <option value="this_year">This Year</option>
+          </select>
         </div>
-
-        {/* View Tabs */}
-        <div className="mb-8 flex gap-2 border-b-2 border-slate-200">
-          <button
-            onClick={() => setCurrentView('financial')}
-            className={`flex items-center gap-2 px-6 py-3 font-semibold transition-colors ${
-              currentView === 'financial'
-                ? 'text-blue-600 border-b-4 border-blue-600 -mb-0.5'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <DollarSign size={20} />
-            Financial Health
-          </button>
-          <button
-            onClick={() => setCurrentView('performance')}
-            className={`flex items-center gap-2 px-6 py-3 font-semibold transition-colors ${
-              currentView === 'performance'
-                ? 'text-blue-600 border-b-4 border-blue-600 -mb-0.5'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Users size={20} />
-            Staff Performance
-          </button>
-          <button
-            onClick={() => setCurrentView('growth')}
-            className={`flex items-center gap-2 px-6 py-3 font-semibold transition-colors ${
-              currentView === 'growth'
-                ? 'text-blue-600 border-b-4 border-blue-600 -mb-0.5'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Target size={20} />
-            Growth & Marketing
-          </button>
-          <button
-            onClick={() => setCurrentView('services')}
-            className={`flex items-center gap-2 px-6 py-3 font-semibold transition-colors ${
-              currentView === 'services'
-                ? 'text-blue-600 border-b-4 border-blue-600 -mb-0.5'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <TrendingUp size={20} />
-            Services & Patients
-          </button>
-        </div>
-
-        {/* Loading State */}
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p className="text-slate-600">Loading data...</p>
-            </div>
-          </div>
-        ) : ledgerData.length === 0 ? (
-          // Empty State
-          <div className="bg-slate-50 border-2 border-slate-200 rounded-lg p-12 text-center">
-            <TrendingUp size={48} className="text-slate-400 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">No records found</h2>
-            <p className="text-slate-600">No data available for the selected period.</p>
-          </div>
-        ) : (
-          <>
-            {/* Financial Health View */}
-            {currentView === 'financial' && (
-              <div className="space-y-8">
-                {/* Summary Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-slate-700 font-semibold">Total Income</h3>
-                      <TrendingUp className="text-blue-600" size={24} />
-                    </div>
-                    <p className="text-3xl font-bold text-blue-600">
-                      {formatCurrency(metrics.totalIncome)}
-                    </p>
-                  </div>
-                  
-                  <div className="bg-red-50 border-2 border-red-200 rounded-lg p-6">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-slate-700 font-semibold">Total Expense</h3>
-                      <TrendingUp className="text-red-600 rotate-180" size={24} />
-                    </div>
-                    <p className="text-3xl font-bold text-red-600">
-                      {formatCurrency(metrics.totalExpense)}
-                    </p>
-                  </div>
-                  
-                  <div className={`border-2 rounded-lg p-6 ${
-                    metrics.netProfit >= 0 
-                      ? 'bg-green-50 border-green-200' 
-                      : 'bg-red-50 border-red-200'
-                  }`}>
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-slate-700 font-semibold">Net Profit</h3>
-                      <DollarSign className={metrics.netProfit >= 0 ? 'text-green-600' : 'text-red-600'} size={24} />
-                    </div>
-                    <p className={`text-3xl font-bold ${
-                      metrics.netProfit >= 0 ? 'text-green-600' : 'text-red-600'
-                    }`}>
-                      {formatCurrency(metrics.netProfit)}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Income vs Expense Trend */}
-                <div className="bg-white border-2 border-slate-200 rounded-lg p-6">
-                  <h3 className="text-xl font-bold text-slate-900 mb-4">Income vs Expense Trend</h3>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <AreaChart data={getIncomeExpenseTrend()}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" />
-                      <YAxis />
-                      <Tooltip content={<CustomTooltip />} />
-                      <Legend />
-                      <Area 
-                        type="monotone" 
-                        dataKey="income" 
-                        stackId="1"
-                        stroke="#10b981" 
-                        fill="#10b981" 
-                        name="Income"
-                      />
-                      <Area 
-                        type="monotone" 
-                        dataKey="expense" 
-                        stackId="2"
-                        stroke="#ef4444" 
-                        fill="#ef4444" 
-                        name="Expense"
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-
-                {/* Income by Payment Method */}
-                <div className="bg-white border-2 border-slate-200 rounded-lg p-6">
-                  <h3 className="text-xl font-bold text-slate-900 mb-4">Income by Payment Method</h3>
-                  {getIncomeByPaymentMethod().length > 0 ? (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie
-                          data={getIncomeByPaymentMethod()}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={(entry) => `${entry.name}: ${formatCurrency(entry.value)}`}
-                          outerRadius={100}
-                          fill="#8884d8"
-                          dataKey="value"
-                        >
-                          {getIncomeByPaymentMethod().map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip content={<CustomTooltip />} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <p className="text-slate-600 text-center py-8">No payment data available</p>
-                  )}
-                </div>
-
-                {/* Expense Breakdown */}
-                <div className="bg-white border-2 border-slate-200 rounded-lg p-6">
-                  <h3 className="text-xl font-bold text-slate-900 mb-4">Expense Breakdown by Category</h3>
-                  {getExpenseByCategory().length > 0 ? (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={getExpenseByCategory()}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="category" />
-                        <YAxis />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Bar dataKey="amount" fill="#ef4444" name="Amount" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <p className="text-slate-600 text-center py-8">No expense data available</p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Staff Performance View */}
-            {currentView === 'performance' && (
-              <div className="space-y-8">
-                {/* Revenue by Doctor */}
-                <div className="bg-white border-2 border-slate-200 rounded-lg p-6">
-                  <h3 className="text-xl font-bold text-slate-900 mb-4">Revenue by Doctor</h3>
-                  {getRevenueByDoctor().length > 0 ? (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={getRevenueByDoctor()}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="doctor" />
-                        <YAxis />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Bar dataKey="revenue" fill="#3b82f6" name="Revenue" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <p className="text-slate-600 text-center py-8">No doctor revenue data available</p>
-                  )}
-                </div>
-
-                {/* Patient Volume by Doctor */}
-                <div className="bg-white border-2 border-slate-200 rounded-lg p-6">
-                  <h3 className="text-xl font-bold text-slate-900 mb-4">Patient Volume by Doctor</h3>
-                  {getPatientVolumeByDoctor().length > 0 ? (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={getPatientVolumeByDoctor()}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="doctor" />
-                        <YAxis />
-                        <Tooltip />
-                        <Bar dataKey="patients" fill="#10b981" name="Patients" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <p className="text-slate-600 text-center py-8">No patient volume data available</p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Growth & Marketing View */}
-            {currentView === 'growth' && (
-              <div className="space-y-8">
-                {/* Revenue by Referral Source */}
-                <div className="bg-white border-2 border-slate-200 rounded-lg p-6">
-                  <h3 className="text-xl font-bold text-slate-900 mb-4">Revenue by Referral Source</h3>
-                  {getRevenueByReferralSource().length > 0 ? (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={getRevenueByReferralSource()}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="source" />
-                        <YAxis />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Bar dataKey="revenue" fill="#8b5cf6" name="Revenue" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <p className="text-slate-600 text-center py-8">No referral source data available</p>
-                  )}
-                </div>
-
-                {/* Patient Demographics */}
-                <div className="bg-white border-2 border-slate-200 rounded-lg p-6">
-                  <h3 className="text-xl font-bold text-slate-900 mb-4">Patient Demographics (by Referral Source)</h3>
-                  {getPatientDemographics().length > 0 ? (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie
-                          data={getPatientDemographics()}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={(entry) => `${entry.name}: ${entry.value}`}
-                          outerRadius={100}
-                          fill="#8884d8"
-                          dataKey="value"
-                        >
-                          {getPatientDemographics().map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <p className="text-slate-600 text-center py-8">No demographics data available</p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Services & Patients View */}
-            {currentView === 'services' && (
-              <div className="space-y-8">
-                {/* Patient Analytics Cards */}
-                <div>
-                  <h2 className="text-2xl font-bold text-slate-900 mb-4">Patient Analytics</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {(() => {
-                      const stats = getNewVsReturningPatients();
-                      return (
-                        <>
-                          <div className="bg-green-50 border-2 border-green-200 rounded-lg p-6">
-                            <h3 className="text-slate-700 font-semibold mb-2">New Patients</h3>
-                            <p className="text-3xl font-bold text-green-600">{stats.new}</p>
-                            <p className="text-sm text-slate-600 mt-1">
-                              {stats.total > 0 ? Math.round((stats.new / stats.total) * 100) : 0}% of total
-                            </p>
-                          </div>
-                          
-                          <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6">
-                            <h3 className="text-slate-700 font-semibold mb-2">Returning Patients</h3>
-                            <p className="text-3xl font-bold text-blue-600">{stats.returning}</p>
-                            <p className="text-sm text-slate-600 mt-1">
-                              {stats.total > 0 ? Math.round((stats.returning / stats.total) * 100) : 0}% of total
-                            </p>
-                          </div>
-                          
-                          <div className="bg-slate-50 border-2 border-slate-200 rounded-lg p-6">
-                            <h3 className="text-slate-700 font-semibold mb-2">Total Patients</h3>
-                            <p className="text-3xl font-bold text-slate-900">{stats.total}</p>
-                            <p className="text-sm text-slate-600 mt-1">In this period</p>
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
-                </div>
-
-                {/* New vs Returning Pie Chart */}
-                <div className="bg-white border-2 border-slate-200 rounded-lg p-6">
-                  <h3 className="text-xl font-bold text-slate-900 mb-4">New vs Returning Patients</h3>
-                  {getPatientTypeDistribution().some(d => d.value > 0) ? (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie
-                          data={getPatientTypeDistribution()}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={(entry) => `${entry.name}: ${entry.value}`}
-                          outerRadius={100}
-                          fill="#8884d8"
-                          dataKey="value"
-                        >
-                          <Cell fill="#10b981" />
-                          <Cell fill="#3b82f6" />
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <p className="text-slate-600 text-center py-8">No patient data available</p>
-                  )}
-                </div>
-
-                {/* Service Category Performance */}
-                <div>
-                  <h2 className="text-2xl font-bold text-slate-900 mb-4">Service Performance</h2>
-                </div>
-
-                {/* Revenue by Service Category */}
-                <div className="bg-white border-2 border-slate-200 rounded-lg p-6">
-                  <h3 className="text-xl font-bold text-slate-900 mb-4">Revenue by Service Category</h3>
-                  {getRevenueByServiceCategory().length > 0 ? (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={getRevenueByServiceCategory()}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="category" />
-                        <YAxis />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Bar dataKey="revenue" fill="#f59e0b" name="Revenue" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <p className="text-slate-600 text-center py-8">No service revenue data available</p>
-                  )}
-                </div>
-
-                {/* Patient Volume by Service */}
-                <div className="bg-white border-2 border-slate-200 rounded-lg p-6">
-                  <h3 className="text-xl font-bold text-slate-900 mb-4">Patient Volume by Service Category</h3>
-                  {getPatientVolumeByService().length > 0 ? (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={getPatientVolumeByService()}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="category" />
-                        <YAxis />
-                        <Tooltip />
-                        <Bar dataKey="count" fill="#8b5cf6" name="Visits" />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <p className="text-slate-600 text-center py-8">No service volume data available</p>
-                  )}
-                </div>
-              </div>
-            )}
-          </>
-        )}
-          </>
+        {lastUpdated && (
+          <p className="text-xs shrink-0" style={{ color: 'var(--ios-label-secondary)' }}>
+            {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </p>
         )}
       </div>
+
+      {/* iOS Tab Bar — scrollable on small screens */}
+      <div className="ios-tab-scroll mb-6 -mx-4 sm:mx-0 px-4 sm:px-0">
+        <div className="ios-segmented-control w-full" style={{ backgroundColor: 'rgba(118, 118, 128, 0.12)', minWidth: 320 }}>
+          {TAB_CONFIG.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setCurrentView(tab.id)}
+                className={`ios-segmented-option flex-1 flex items-center justify-center gap-1.5${currentView === tab.id ? ' active' : ''}`}
+              >
+                <Icon size={13} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-t-transparent"
+            style={{ borderColor: 'var(--ios-blue)', borderTopColor: 'transparent' }} />
+        </div>
+      ) : ledgerData.length === 0 ? (
+        <div className="ios-card rounded-2xl p-12 text-center">
+          <BarChart2 size={40} className="mx-auto mb-3" style={{ color: 'var(--ios-label-tertiary)' }} />
+          <p className="text-base font-semibold" style={{ color: 'var(--ios-label)' }}>No records found</p>
+          <p className="text-sm mt-1" style={{ color: 'var(--ios-label-secondary)' }}>No data for the selected period</p>
+        </div>
+      ) : (
+        <div className="space-y-5">
+
+          {/* Financial Health */}
+          {currentView === 'financial' && (
+            <>
+              {/* Summary Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="ios-card rounded-2xl p-4">
+                  <p className="text-xs font-semibold mb-1" style={{ color: 'var(--ios-label-secondary)' }}>Income</p>
+                  <p className="text-base font-bold leading-tight" style={{ color: 'var(--ios-green)' }}>
+                    {formatCurrency(metrics.totalIncome)}
+                  </p>
+                </div>
+                <div className="ios-card rounded-2xl p-4">
+                  <p className="text-xs font-semibold mb-1" style={{ color: 'var(--ios-label-secondary)' }}>Expenses</p>
+                  <p className="text-base font-bold leading-tight" style={{ color: 'var(--ios-red)' }}>
+                    {formatCurrency(metrics.totalExpense)}
+                  </p>
+                </div>
+                <div className="ios-card rounded-2xl p-4">
+                  <p className="text-xs font-semibold mb-1" style={{ color: 'var(--ios-label-secondary)' }}>Net</p>
+                  <p className="text-base font-bold leading-tight" style={{ color: metrics.netProfit >= 0 ? 'var(--ios-green)' : 'var(--ios-red)' }}>
+                    {formatCurrency(metrics.netProfit)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="ios-card rounded-2xl p-4">
+                <h3 className="text-sm font-bold mb-4" style={{ color: 'var(--ios-label)' }}>Income vs Expense Trend</h3>
+                <ResponsiveContainer width="100%" height={220}>
+                  <AreaChart data={getIncomeExpenseTrend()}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--ios-separator-opaque)" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--ios-label-secondary)' }} />
+                    <YAxis tick={{ fontSize: 11, fill: 'var(--ios-label-secondary)' }} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Area type="monotone" dataKey="income" stackId="1" stroke="#34C759" fill="rgba(52, 199, 89, 0.2)" name="Income" />
+                    <Area type="monotone" dataKey="expense" stackId="2" stroke="#FF3B30" fill="rgba(255, 59, 48, 0.2)" name="Expense" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="ios-card rounded-2xl p-4">
+                <h3 className="text-sm font-bold mb-4" style={{ color: 'var(--ios-label)' }}>Income by Payment Method</h3>
+                {getIncomeByPaymentMethod().length > 0 ? (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie data={getIncomeByPaymentMethod()} cx="50%" cy="50%" labelLine={false}
+                        label={(entry) => `${entry.name}: ${entry.value.toLocaleString()}`}
+                        outerRadius={80} dataKey="value">
+                        {getIncomeByPaymentMethod().map((_, i) => (
+                          <Cell key={i} fill={IOS_COLORS[i % IOS_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip content={<CustomTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-sm text-center py-8" style={{ color: 'var(--ios-label-secondary)' }}>No payment data available</p>
+                )}
+              </div>
+
+              <div className="ios-card rounded-2xl p-4">
+                <h3 className="text-sm font-bold mb-4" style={{ color: 'var(--ios-label)' }}>Expense Breakdown by Category</h3>
+                {getExpenseByCategory().length > 0 ? (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={getExpenseByCategory()}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--ios-separator-opaque)" />
+                      <XAxis dataKey="category" tick={{ fontSize: 10, fill: 'var(--ios-label-secondary)' }} />
+                      <YAxis tick={{ fontSize: 11, fill: 'var(--ios-label-secondary)' }} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Bar dataKey="amount" fill="#FF3B30" name="Amount" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-sm text-center py-8" style={{ color: 'var(--ios-label-secondary)' }}>No expense data available</p>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Staff Performance */}
+          {currentView === 'performance' && (
+            <>
+              <div className="ios-card rounded-2xl p-4">
+                <h3 className="text-sm font-bold mb-4" style={{ color: 'var(--ios-label)' }}>Revenue by Doctor</h3>
+                {getRevenueByDoctor().length > 0 ? (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={getRevenueByDoctor()}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--ios-separator-opaque)" />
+                      <XAxis dataKey="doctor" tick={{ fontSize: 10, fill: 'var(--ios-label-secondary)' }} />
+                      <YAxis tick={{ fontSize: 11, fill: 'var(--ios-label-secondary)' }} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Bar dataKey="revenue" fill="#007AFF" name="Revenue" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-sm text-center py-8" style={{ color: 'var(--ios-label-secondary)' }}>No doctor revenue data</p>
+                )}
+              </div>
+
+              <div className="ios-card rounded-2xl p-4">
+                <h3 className="text-sm font-bold mb-4" style={{ color: 'var(--ios-label)' }}>Patient Volume by Doctor</h3>
+                {getPatientVolumeByDoctor().length > 0 ? (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={getPatientVolumeByDoctor()}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--ios-separator-opaque)" />
+                      <XAxis dataKey="doctor" tick={{ fontSize: 10, fill: 'var(--ios-label-secondary)' }} />
+                      <YAxis tick={{ fontSize: 11, fill: 'var(--ios-label-secondary)' }} />
+                      <Tooltip />
+                      <Bar dataKey="patients" fill="#34C759" name="Patients" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-sm text-center py-8" style={{ color: 'var(--ios-label-secondary)' }}>No patient volume data</p>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Growth & Marketing */}
+          {currentView === 'growth' && (
+            <>
+              <div className="ios-card rounded-2xl p-4">
+                <h3 className="text-sm font-bold mb-4" style={{ color: 'var(--ios-label)' }}>Revenue by Referral Source</h3>
+                {getRevenueByReferralSource().length > 0 ? (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={getRevenueByReferralSource()}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--ios-separator-opaque)" />
+                      <XAxis dataKey="source" tick={{ fontSize: 10, fill: 'var(--ios-label-secondary)' }} />
+                      <YAxis tick={{ fontSize: 11, fill: 'var(--ios-label-secondary)' }} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Bar dataKey="revenue" fill="#AF52DE" name="Revenue" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-sm text-center py-8" style={{ color: 'var(--ios-label-secondary)' }}>No referral source data</p>
+                )}
+              </div>
+
+              <div className="ios-card rounded-2xl p-4">
+                <h3 className="text-sm font-bold mb-4" style={{ color: 'var(--ios-label)' }}>Patient Demographics by Referral Source</h3>
+                {getPatientDemographics().length > 0 ? (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie data={getPatientDemographics()} cx="50%" cy="50%" labelLine={false}
+                        label={(entry) => `${entry.name}: ${entry.value}`}
+                        outerRadius={80} dataKey="value">
+                        {getPatientDemographics().map((_, i) => (
+                          <Cell key={i} fill={IOS_COLORS[i % IOS_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-sm text-center py-8" style={{ color: 'var(--ios-label-secondary)' }}>No demographics data</p>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Services & Patients */}
+          {currentView === 'services' && (
+            <>
+              {(() => {
+                const stats = getNewVsReturningPatients();
+                return (
+                  <div className="grid grid-cols-3 sm:grid-cols-3 gap-3">
+                    <div className="ios-card rounded-2xl p-4">
+                      <p className="text-xs font-semibold mb-1" style={{ color: 'var(--ios-label-secondary)' }}>New</p>
+                      <p className="text-2xl font-bold" style={{ color: 'var(--ios-green)' }}>{stats.new}</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--ios-label-tertiary)' }}>
+                        {stats.total > 0 ? Math.round((stats.new / stats.total) * 100) : 0}%
+                      </p>
+                    </div>
+                    <div className="ios-card rounded-2xl p-4">
+                      <p className="text-xs font-semibold mb-1" style={{ color: 'var(--ios-label-secondary)' }}>Returning</p>
+                      <p className="text-2xl font-bold" style={{ color: 'var(--ios-blue)' }}>{stats.returning}</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--ios-label-tertiary)' }}>
+                        {stats.total > 0 ? Math.round((stats.returning / stats.total) * 100) : 0}%
+                      </p>
+                    </div>
+                    <div className="ios-card rounded-2xl p-4">
+                      <p className="text-xs font-semibold mb-1" style={{ color: 'var(--ios-label-secondary)' }}>Total</p>
+                      <p className="text-2xl font-bold" style={{ color: 'var(--ios-label)' }}>{stats.total}</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--ios-label-tertiary)' }}>patients</p>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="ios-card rounded-2xl p-4">
+                <h3 className="text-sm font-bold mb-4" style={{ color: 'var(--ios-label)' }}>New vs Returning Patients</h3>
+                {getPatientTypeDistribution().some(d => d.value > 0) ? (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie data={getPatientTypeDistribution()} cx="50%" cy="50%" labelLine={false}
+                        label={(entry) => `${entry.name}: ${entry.value}`}
+                        outerRadius={80} dataKey="value">
+                        <Cell fill="#34C759" />
+                        <Cell fill="#007AFF" />
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-sm text-center py-8" style={{ color: 'var(--ios-label-secondary)' }}>No patient data</p>
+                )}
+              </div>
+
+              <div className="ios-card rounded-2xl p-4">
+                <h3 className="text-sm font-bold mb-4" style={{ color: 'var(--ios-label)' }}>Revenue by Service Category</h3>
+                {getRevenueByServiceCategory().length > 0 ? (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={getRevenueByServiceCategory()}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--ios-separator-opaque)" />
+                      <XAxis dataKey="category" tick={{ fontSize: 10, fill: 'var(--ios-label-secondary)' }} />
+                      <YAxis tick={{ fontSize: 11, fill: 'var(--ios-label-secondary)' }} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Bar dataKey="revenue" fill="#FF9500" name="Revenue" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-sm text-center py-8" style={{ color: 'var(--ios-label-secondary)' }}>No service revenue data</p>
+                )}
+              </div>
+
+              <div className="ios-card rounded-2xl p-4">
+                <h3 className="text-sm font-bold mb-4" style={{ color: 'var(--ios-label)' }}>Patient Volume by Service Category</h3>
+                {getPatientVolumeByService().length > 0 ? (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={getPatientVolumeByService()}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--ios-separator-opaque)" />
+                      <XAxis dataKey="category" tick={{ fontSize: 10, fill: 'var(--ios-label-secondary)' }} />
+                      <YAxis tick={{ fontSize: 11, fill: 'var(--ios-label-secondary)' }} />
+                      <Tooltip />
+                      <Bar dataKey="count" fill="#5856D6" name="Visits" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-sm text-center py-8" style={{ color: 'var(--ios-label-secondary)' }}>No service volume data</p>
+                )}
+              </div>
+            </>
+          )}
+
+        </div>
+      )}
     </div>
   );
 }

@@ -12,15 +12,15 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-lg transition-colors"
+      className="ios-btn-primary"
     >
-      {pending ? 'Signing in...' : 'Sign In'}
+      {pending ? 'Signing in…' : 'Sign In'}
     </button>
   );
 }
 
 export default function LoginPage() {
-  const [state, formAction, isPending] = useActionState(
+  const [state, formAction] = useActionState(
     async (_prevState: { error: string | null }, formData: FormData) => {
       return await login(formData);
     },
@@ -28,28 +28,33 @@ export default function LoginPage() {
   );
 
   return (
-    <div className="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            KELH Manager V2
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Sign in to your account
-          </p>
+    <div className="min-h-[calc(100dvh-56px)] flex items-center justify-center py-10 px-4">
+      <div className="w-full max-w-sm">
+
+        {/* App Icon + Title */}
+        <div className="flex flex-col items-center mb-8">
+          <div
+            className="w-20 h-20 rounded-[22px] flex items-center justify-center text-white text-3xl font-bold mb-4 shadow-md"
+            style={{ background: 'linear-gradient(145deg, var(--ios-blue), var(--ios-indigo))' }}
+          >
+            K
+          </div>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--ios-label)' }}>KELH Manager</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--ios-label-secondary)' }}>Hospital Management System</p>
         </div>
 
-        <form className="mt-8 space-y-6" action={formAction}>
+        {/* Card */}
+        <div className="ios-card p-6 rounded-3xl">
           {state?.error && (
-            <div className="rounded-md bg-red-50 border border-red-200 p-4">
-              <p className="text-sm text-red-800">{state.error}</p>
+            <div className="mb-5 p-4 rounded-xl text-sm font-medium" style={{ backgroundColor: 'rgba(255, 59, 48, 0.1)', color: 'var(--ios-red)' }}>
+              {state.error}
             </div>
           )}
 
-          <div className="rounded-md shadow-sm space-y-4">
+          <form action={formAction} className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                Email address
+              <label htmlFor="email" className="block text-sm font-semibold mb-2" style={{ color: 'var(--ios-label-secondary)' }}>
+                Email
               </label>
               <input
                 id="email"
@@ -57,12 +62,13 @@ export default function LoginPage() {
                 type="email"
                 autoComplete="email"
                 required
-                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="ios-input w-full"
                 placeholder="you@example.com"
               />
             </div>
+
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="password" className="block text-sm font-semibold mb-2" style={{ color: 'var(--ios-label-secondary)' }}>
                 Password
               </label>
               <input
@@ -71,25 +77,25 @@ export default function LoginPage() {
                 type="password"
                 autoComplete="current-password"
                 required
-                className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="ios-input w-full"
                 placeholder="••••••••"
               />
             </div>
-          </div>
 
-          <div>
-            <SubmitButton />
-          </div>
+            <div className="pt-1">
+              <SubmitButton />
+            </div>
+          </form>
 
-          <div className="text-center">
-            <p className="text-sm text-gray-600">
+          <div className="mt-5 text-center">
+            <p className="text-sm" style={{ color: 'var(--ios-label-secondary)' }}>
               Don't have an account?{' '}
-              <Link href="/signup" className="font-medium text-blue-600 hover:text-blue-500">
+              <Link href="/signup" className="font-semibold" style={{ color: 'var(--ios-blue)' }}>
                 Sign up
               </Link>
             </p>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

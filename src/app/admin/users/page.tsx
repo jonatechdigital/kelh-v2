@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Shield, Users as UsersIcon, UserPlus, Trash2, Loader2, Key, Copy, Check, Edit } from 'lucide-react';
+import { ArrowLeft, Shield, Users as UsersIcon, UserPlus, Trash2, Loader2, Key, Copy, Check, Edit, X } from 'lucide-react';
 import { createUser, checkIsAdmin, deleteUser, resetUserPassword, updateUserRole } from '@/app/actions/users';
 import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
@@ -15,18 +15,21 @@ interface UserWithRole {
   full_name?: string;
 }
 
+const getRoleBadge = (role: string): { bg: string; color: string } => {
+  switch (role) {
+    case 'admin': return { bg: 'rgba(175, 82, 222, 0.15)', color: '#7a2aaa' };
+    case 'staff': return { bg: 'rgba(0, 122, 255, 0.12)', color: 'var(--ios-blue)' };
+    default: return { bg: 'rgba(52, 199, 89, 0.12)', color: '#1a7a30' };
+  }
+};
+
 export default function AdminUsersPage() {
   const router = useRouter();
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    full_name: '',
-    role: 'staff',
-  });
+  const [formData, setFormData] = useState({ email: '', password: '', full_name: '', role: 'staff' });
   const [submitting, setSubmitting] = useState(false);
   const [createdUser, setCreatedUser] = useState<{ email: string; password: string; role: string } | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
@@ -35,6 +38,7 @@ export default function AdminUsersPage() {
   const [copiedPassword, setCopiedPassword] = useState(false);
   const [editRoleUserId, setEditRoleUserId] = useState<string | null>(null);
   const [newRole, setNewRole] = useState<string>('staff');
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
   useEffect(() => {
     checkAdminAccess();
@@ -43,15 +47,9 @@ export default function AdminUsersPage() {
 
   const checkAdminAccess = async () => {
     try {
-      console.log('Checking admin access...');
       const adminStatus = await checkIsAdmin();
-      console.log('Admin status result:', adminStatus);
       setIsAdmin(adminStatus);
-      if (!adminStatus) {
-        console.log('Not admin, redirecting...');
-        // Wait a bit before redirecting so we can see the error
-        setTimeout(() => router.push('/'), 2000);
-      }
+      if (!adminStatus) setTimeout(() => router.push('/'), 2000);
     } catch (error) {
       console.error('Error checking admin:', error);
       setIsAdmin(false);
@@ -62,27 +60,20 @@ export default function AdminUsersPage() {
   const fetchUsers = async () => {
     try {
       const supabase = createClient();
-      
-      // Fetch from view that includes email
       const { data: usersData, error: usersError } = await supabase
         .from('user_roles_with_email')
         .select('user_id, email, full_name, role, created_at')
         .order('created_at', { ascending: false });
 
-      if (usersError) {
-        console.error('Error fetching users:', usersError);
-        throw usersError;
-      }
+      if (usersError) throw usersError;
 
-      const usersWithRoles = (usersData || []).map(u => ({
+      setUsers((usersData || []).map(u => ({
         id: u.user_id,
         email: u.email || 'No email',
         full_name: u.full_name,
         role: u.role,
         created_at: u.created_at,
-      }));
-
-      setUsers(usersWithRoles);
+      })));
     } catch (error) {
       console.error('Error fetching users:', error);
     } finally {
@@ -108,40 +99,29 @@ export default function AdminUsersPage() {
       setMessage({ type: 'error', text: result.error });
     } else {
       setMessage({ type: 'success', text: result.message || 'User created successfully!' });
-      // Show the created user details including password
-      setCreatedUser({
-        email: result.email!,
-        password: result.password!,
-        role: result.role!,
-      });
+      setCreatedUser({ email: result.email!, password: result.password!, role: result.role! });
       setFormData({ email: '', password: '', full_name: '', role: 'staff' });
       fetchUsers();
     }
-
     setSubmitting(false);
   };
 
   const handleDeleteUser = async (userId: string, email: string) => {
     if (!confirm(`Are you sure you want to delete user: ${email}?`)) return;
-
     setDeletingUserId(userId);
     const result = await deleteUser(userId);
-
     if (result.error) {
       alert(`Error: ${result.error}`);
     } else {
       setMessage({ type: 'success', text: result.message || 'User deleted' });
       fetchUsers();
     }
-
     setDeletingUserId(null);
   };
 
   const handleResetPassword = async () => {
     if (!resetPasswordUserId || !newPassword) return;
-
     const result = await resetUserPassword(resetPasswordUserId, newPassword);
-
     if (result.error) {
       alert(`Error: ${result.error}`);
     } else {
@@ -164,9 +144,7 @@ export default function AdminUsersPage() {
 
   const handleEditRole = async () => {
     if (!editRoleUserId) return;
-
     const result = await updateUserRole(editRoleUserId, newRole);
-
     if (result.error) {
       alert(`Error: ${result.error}`);
     } else {
@@ -178,10 +156,11 @@ export default function AdminUsersPage() {
 
   if (isAdmin === null || loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center py-24">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-4" />
-          <p className="text-gray-600">Checking permissions...</p>
+          <div className="animate-spin rounded-full h-10 w-10 border-2 border-t-transparent mx-auto mb-3"
+            style={{ borderColor: 'var(--ios-blue)', borderTopColor: 'transparent' }} />
+          <p className="text-sm" style={{ color: 'var(--ios-label-secondary)' }}>Checking permissions…</p>
         </div>
       </div>
     );
@@ -189,301 +168,346 @@ export default function AdminUsersPage() {
 
   if (isAdmin === false) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="max-w-md p-8 bg-red-50 border border-red-200 rounded-xl">
-          <h2 className="text-xl font-bold text-red-900 mb-2">Access Denied</h2>
-          <p className="text-red-700 mb-4">You don't have admin permissions to access this page.</p>
-          <p className="text-sm text-red-600">Redirecting to dashboard...</p>
+      <div className="flex items-center justify-center py-24">
+        <div className="ios-card rounded-2xl p-8 max-w-sm text-center">
+          <Shield size={40} className="mx-auto mb-4" style={{ color: 'var(--ios-red)' }} />
+          <h2 className="text-lg font-bold mb-2" style={{ color: 'var(--ios-label)' }}>Access Denied</h2>
+          <p className="text-sm" style={{ color: 'var(--ios-label-secondary)' }}>Admin permissions required. Redirecting…</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      {/* Header */}
-      <div className="mb-8">
+    <div>
+      {/* Page Header */}
+      <div className="flex items-center gap-3 mb-5">
         <Link
           href="/"
-          className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700 mb-4"
+          className="w-9 h-9 rounded-full flex items-center justify-center"
+          style={{ backgroundColor: 'var(--ios-fill-tertiary)', color: 'var(--ios-blue)' }}
         >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Dashboard
+          <ArrowLeft size={18} />
         </Link>
-        <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
-        <p className="text-gray-600 mt-1">Add and manage system users</p>
+        <div className="flex-1">
+          <h1 className="text-xl font-bold" style={{ color: 'var(--ios-label)' }}>User Management</h1>
+          <p className="text-xs" style={{ color: 'var(--ios-label-secondary)' }}>Add and manage system users</p>
+        </div>
       </div>
 
-      {/* Create User Form */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-            <UserPlus className="w-5 h-5 text-blue-600" />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">Create New User</h2>
-            <p className="text-sm text-gray-600">Add a new user to the system</p>
-          </div>
+      {/* Feedback message */}
+      {message && (
+        <div
+          className="p-4 rounded-2xl mb-4 text-sm font-medium"
+          style={{
+            backgroundColor: message.type === 'success' ? 'rgba(52, 199, 89, 0.1)' : 'rgba(255, 59, 48, 0.1)',
+            color: message.type === 'success' ? 'var(--ios-green)' : 'var(--ios-red)',
+          }}
+        >
+          {message.text}
         </div>
+      )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="full_name" className="block text-sm font-medium text-gray-700 mb-1">
-                Full Name
-              </label>
-              <input
-                id="full_name"
-                type="text"
-                value={formData.full_name}
-                onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="John Doe"
-              />
-            </div>
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                Email Address
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="user@hospital.com"
-              />
+      {/* Created user credentials */}
+      {createdUser && (
+        <div className="ios-card rounded-2xl p-4 mb-5" style={{ border: '1px solid rgba(0, 122, 255, 0.2)' }}>
+          <p className="text-sm font-bold mb-3" style={{ color: 'var(--ios-blue)' }}>Share These Credentials</p>
+          <div className="space-y-2">
+            {[
+              { label: 'Email', value: createdUser.email },
+              { label: 'Role', value: createdUser.role },
+            ].map(({ label, value }) => (
+              <div key={label} className="flex justify-between items-center py-2" style={{ borderBottom: '0.5px solid var(--ios-separator-opaque)' }}>
+                <span className="text-xs font-medium" style={{ color: 'var(--ios-label-secondary)' }}>{label}</span>
+                <span className="text-sm font-semibold" style={{ color: 'var(--ios-label)' }}>{value}</span>
+              </div>
+            ))}
+            <div className="flex justify-between items-center py-2">
+              <span className="text-xs font-medium" style={{ color: 'var(--ios-label-secondary)' }}>Password</span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-mono font-semibold" style={{ color: 'var(--ios-label)' }}>{createdUser.password}</span>
+                <button
+                  onClick={() => copyToClipboard(createdUser.password)}
+                  className="w-7 h-7 rounded-full flex items-center justify-center"
+                  style={{ backgroundColor: 'var(--ios-fill-tertiary)', color: copiedPassword ? 'var(--ios-green)' : 'var(--ios-blue)' }}
+                >
+                  {copiedPassword ? <Check size={13} /> : <Copy size={13} />}
+                </button>
+              </div>
             </div>
           </div>
+          <p className="text-xs mt-3" style={{ color: 'var(--ios-orange)' }}>Copy this password now — you won't see it again!</p>
+        </div>
+      )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                required
-                minLength={6}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="••••••••"
-              />
-              <p className="text-xs text-gray-500 mt-1">Minimum 6 characters</p>
-            </div>
-            <div>
-              <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-1">
-                User Role
-              </label>
-              <select
-                id="role"
-                value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+      {/* Create User */}
+      <div className="mb-5">
+        {!showCreateForm ? (
+          <button
+            onClick={() => setShowCreateForm(true)}
+            className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-white font-semibold text-base"
+            style={{ backgroundColor: 'var(--ios-blue)' }}
+          >
+            <UserPlus size={20} />
+            Create New User
+          </button>
+        ) : (
+          <div className="ios-card rounded-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-4" style={{ borderBottom: '0.5px solid var(--ios-separator-opaque)' }}>
+              <h2 className="text-base font-bold" style={{ color: 'var(--ios-label)' }}>New User</h2>
+              <button
+                onClick={() => setShowCreateForm(false)}
+                className="w-7 h-7 rounded-full flex items-center justify-center"
+                style={{ backgroundColor: 'var(--ios-fill-tertiary)', color: 'var(--ios-label-secondary)' }}
               >
-                <option value="receptionist">Receptionist</option>
-                <option value="staff">Staff</option>
-                <option value="admin">Admin</option>
-              </select>
+                <X size={14} />
+              </button>
             </div>
-          </div>
 
-          {message && (
-            <div className={`p-4 rounded-lg ${
-              message.type === 'success' 
-                ? 'bg-green-50 text-green-800 border border-green-200' 
-                : 'bg-red-50 text-red-800 border border-red-200'
-            }`}>
-              {message.text}
-            </div>
-          )}
-
-          {createdUser && (
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <h3 className="font-semibold text-blue-900 mb-2">✅ User Created - Share These Credentials</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center justify-between bg-white p-2 rounded">
-                  <span className="text-gray-600">Email:</span>
-                  <span className="font-mono font-semibold">{createdUser.email}</span>
+            <form onSubmit={handleSubmit} className="p-4 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--ios-label-secondary)' }}>Full Name</label>
+                  <input
+                    type="text"
+                    value={formData.full_name}
+                    onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                    required
+                    className="ios-input w-full"
+                    placeholder="John Doe"
+                  />
                 </div>
-                <div className="flex items-center justify-between bg-white p-2 rounded">
-                  <span className="text-gray-600">Password:</span>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono font-semibold">{createdUser.password}</span>
-                    <button
-                      onClick={() => copyToClipboard(createdUser.password)}
-                      className="p-1 hover:bg-blue-100 rounded"
-                      title="Copy password"
-                    >
-                      {copiedPassword ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4 text-blue-600" />}
-                    </button>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between bg-white p-2 rounded">
-                  <span className="text-gray-600">Role:</span>
-                  <span className="font-semibold capitalize">{createdUser.role}</span>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--ios-label-secondary)' }}>Role</label>
+                  <select
+                    value={formData.role}
+                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                    className="ios-input w-full"
+                  >
+                    <option value="receptionist">Receptionist</option>
+                    <option value="staff">Staff</option>
+                    <option value="admin">Admin</option>
+                  </select>
                 </div>
               </div>
-              <p className="text-xs text-blue-700 mt-2">⚠️ Copy this password now - you won't be able to see it again!</p>
-            </div>
-          )}
 
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:bg-blue-400 transition-colors"
-          >
-            {submitting ? 'Creating User...' : 'Create User'}
-          </button>
-        </form>
-      </div>
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--ios-label-secondary)' }}>Email</label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  required
+                  className="ios-input w-full"
+                  placeholder="user@hospital.com"
+                />
+              </div>
 
-      {/* Current Users */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
-        <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-bold text-gray-900">Current Users ({users.length})</h2>
-        </div>
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--ios-label-secondary)' }}>Password</label>
+                <input
+                  type="password"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  required
+                  minLength={6}
+                  className="ios-input w-full"
+                  placeholder="••••••••"
+                />
+                <p className="mt-1 text-xs" style={{ color: 'var(--ios-label-secondary)' }}>Minimum 6 characters</p>
+              </div>
 
-        {users.length === 0 ? (
-          <div className="p-8 text-center">
-            <UsersIcon className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-            <p className="text-gray-600">No users yet. Create your first user above!</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="text-left py-3 px-6 text-xs font-semibold text-gray-700 uppercase">Email</th>
-                  <th className="text-left py-3 px-6 text-xs font-semibold text-gray-700 uppercase">Name</th>
-                  <th className="text-left py-3 px-6 text-xs font-semibold text-gray-700 uppercase">Role</th>
-                  <th className="text-left py-3 px-6 text-xs font-semibold text-gray-700 uppercase">Created</th>
-                  <th className="text-right py-3 px-6 text-xs font-semibold text-gray-700 uppercase">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {users.map((user) => (
-                  <tr key={user.id} className="hover:bg-gray-50">
-                    <td className="py-4 px-6">
-                      <span className="text-sm text-gray-900 font-medium">
-                        {user.email}
-                      </span>
-                    </td>
-                    <td className="py-4 px-6">
-                      <span className="text-sm text-gray-600">
-                        {user.full_name || '-'}
-                      </span>
-                    </td>
-                    <td className="py-4 px-6">
-                      <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${
-                        user.role === 'admin' 
-                          ? 'bg-purple-100 text-purple-800' 
-                          : user.role === 'staff'
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-green-100 text-green-800'
-                      }`}>
-                        {user.role}
-                      </span>
-                    </td>
-                    <td className="py-4 px-6 text-sm text-gray-600">
-                      {new Date(user.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="py-4 px-6">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => {
-                            setEditRoleUserId(user.id);
-                            setNewRole(user.role);
-                          }}
-                          className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                          title="Edit Role"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => setResetPasswordUserId(user.id)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="Reset Password"
-                        >
-                          <Key className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteUser(user.id, user.email)}
-                          disabled={deletingUserId === user.id}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                          title="Delete User"
-                        >
-                          {deletingUserId === user.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-4 h-4" />
-                          )}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+              <div className="flex gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateForm(false)}
+                  className="flex-1 py-3.5 rounded-2xl text-base font-semibold"
+                  style={{ backgroundColor: 'var(--ios-fill-tertiary)', color: 'var(--ios-label)' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 py-3.5 rounded-2xl text-white text-base font-semibold disabled:opacity-40"
+                  style={{ backgroundColor: 'var(--ios-blue)' }}
+                >
+                  {submitting ? 'Creating…' : 'Create'}
+                </button>
+              </div>
+            </form>
           </div>
         )}
       </div>
 
+      {/* Users List */}
+      <div className="mb-6">
+        <p className="text-xs font-semibold uppercase tracking-wide mb-2 px-1" style={{ color: 'var(--ios-label-secondary)' }}>
+          Users ({users.length})
+        </p>
+
+        {users.length === 0 ? (
+          <div className="ios-card rounded-2xl p-8 text-center">
+            <UsersIcon size={36} className="mx-auto mb-3" style={{ color: 'var(--ios-label-tertiary)' }} />
+            <p className="text-sm font-medium" style={{ color: 'var(--ios-label-secondary)' }}>No users yet. Create your first user above.</p>
+          </div>
+        ) : (
+          <div className="ios-card rounded-2xl overflow-hidden">
+            {users.map((user, idx) => {
+              const badge = getRoleBadge(user.role);
+              return (
+                <div key={user.id}>
+                  {idx > 0 && (
+                    <div className="mx-4" style={{ height: '0.5px', backgroundColor: 'var(--ios-separator-opaque)' }} />
+                  )}
+                  <div className="ios-list-row px-4 py-3.5">
+                    {/* Avatar */}
+                    <div
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
+                      style={{ backgroundColor: 'var(--ios-blue)' }}
+                    >
+                      {(user.full_name || user.email).slice(0, 2).toUpperCase()}
+                    </div>
+
+                    {/* Details */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <p className="text-sm font-semibold truncate" style={{ color: 'var(--ios-label)' }}>
+                          {user.full_name || user.email}
+                        </p>
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium shrink-0" style={{ backgroundColor: badge.bg, color: badge.color }}>
+                          {user.role}
+                        </span>
+                      </div>
+                      <p className="text-xs truncate" style={{ color: 'var(--ios-label-secondary)' }}>{user.email}</p>
+                      <p className="text-xs" style={{ color: 'var(--ios-label-tertiary)' }}>
+                        {new Date(user.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => { setEditRoleUserId(user.id); setNewRole(user.role); }}
+                        className="w-8 h-8 rounded-full flex items-center justify-center"
+                        style={{ backgroundColor: 'rgba(175, 82, 222, 0.1)', color: 'var(--ios-purple)' }}
+                        title="Edit Role"
+                      >
+                        <Edit size={14} />
+                      </button>
+                      <button
+                        onClick={() => setResetPasswordUserId(user.id)}
+                        className="w-8 h-8 rounded-full flex items-center justify-center"
+                        style={{ backgroundColor: 'rgba(0, 122, 255, 0.1)', color: 'var(--ios-blue)' }}
+                        title="Reset Password"
+                      >
+                        <Key size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteUser(user.id, user.email)}
+                        disabled={deletingUserId === user.id}
+                        className="w-8 h-8 rounded-full flex items-center justify-center disabled:opacity-40"
+                        style={{ backgroundColor: 'rgba(255, 59, 48, 0.1)', color: 'var(--ios-red)' }}
+                        title="Delete User"
+                      >
+                        {deletingUserId === user.id
+                          ? <Loader2 size={14} className="animate-spin" />
+                          : <Trash2 size={14} />
+                        }
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Role Reference */}
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide mb-2 px-1" style={{ color: 'var(--ios-label-secondary)' }}>Role Reference</p>
+        <div className="ios-card rounded-2xl overflow-hidden">
+          {[
+            {
+              role: 'Admin', color: 'var(--ios-purple)', bg: 'rgba(175, 82, 222, 0.12)',
+              perms: ['Full system access', 'Create users', 'Delete records', 'All features']
+            },
+            {
+              role: 'Staff', color: 'var(--ios-blue)', bg: 'rgba(0, 122, 255, 0.1)',
+              perms: ['Manage patients', 'Record transactions', 'View reports', 'Standard access']
+            },
+            {
+              role: 'Receptionist', color: 'var(--ios-green)', bg: 'rgba(52, 199, 89, 0.1)',
+              perms: ['Check-in patients', 'Search patients', 'Basic features', 'View only']
+            },
+          ].map((item, idx) => (
+            <div key={item.role}>
+              {idx > 0 && (
+                <div className="mx-4" style={{ height: '0.5px', backgroundColor: 'var(--ios-separator-opaque)' }} />
+              )}
+              <div className="ios-list-row px-4 py-3.5">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: item.bg }}>
+                  <Shield size={16} style={{ color: item.color }} />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold mb-1" style={{ color: 'var(--ios-label)' }}>{item.role}</p>
+                  <p className="text-xs" style={{ color: 'var(--ios-label-secondary)' }}>{item.perms.join(' · ')}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Edit Role Modal */}
       {editRoleUserId && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 ios-backdrop"
           onClick={() => setEditRoleUserId(null)}
         >
-          <div 
-            className="bg-white rounded-xl max-w-md w-full p-6"
+          <div
+            className="bg-white w-full max-w-sm rounded-3xl overflow-hidden"
+            style={{ boxShadow: 'var(--ios-shadow-lg)' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                <Edit className="w-5 h-5 text-purple-600" />
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(175, 82, 222, 0.12)' }}>
+                    <Edit size={16} style={{ color: 'var(--ios-purple)' }} />
+                  </div>
+                  <div>
+                    <p className="text-base font-bold" style={{ color: 'var(--ios-label)' }}>Edit Role</p>
+                    <p className="text-xs" style={{ color: 'var(--ios-label-secondary)' }}>{users.find(u => u.id === editRoleUserId)?.email}</p>
+                  </div>
+                </div>
+                <button onClick={() => setEditRoleUserId(null)} className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: 'var(--ios-fill-tertiary)', color: 'var(--ios-label-secondary)' }}>
+                  <X size={14} />
+                </button>
               </div>
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">Edit Role</h2>
-                <p className="text-sm text-gray-600">
-                  {users.find(u => u.id === editRoleUserId)?.email}
-                </p>
+
+              <div className="mb-5">
+                <label className="block text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--ios-label-secondary)' }}>New Role</label>
+                <select
+                  value={newRole}
+                  onChange={(e) => setNewRole(e.target.value)}
+                  className="ios-input w-full"
+                >
+                  <option value="receptionist">Receptionist</option>
+                  <option value="staff">Staff</option>
+                  <option value="admin">Admin</option>
+                </select>
               </div>
-            </div>
 
-            <div className="mb-4">
-              <label htmlFor="editRole" className="block text-sm font-medium text-gray-700 mb-1">
-                Select New Role
-              </label>
-              <select
-                id="editRole"
-                value={newRole}
-                onChange={(e) => setNewRole(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-              >
-                <option value="receptionist">Receptionist</option>
-                <option value="staff">Staff</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                onClick={handleEditRole}
-                className="flex-1 py-2 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors"
-              >
-                Update Role
-              </button>
-              <button
-                onClick={() => setEditRoleUserId(null)}
-                className="flex-1 py-2 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition-colors"
-              >
-                Cancel
-              </button>
+              <div className="flex gap-3">
+                <button onClick={() => setEditRoleUserId(null)} className="flex-1 py-4 rounded-2xl text-base font-semibold" style={{ backgroundColor: 'var(--ios-fill-tertiary)', color: 'var(--ios-label)' }}>
+                  Cancel
+                </button>
+                <button onClick={handleEditRole} className="flex-1 py-4 rounded-2xl text-white text-base font-semibold" style={{ backgroundColor: 'var(--ios-purple)' }}>
+                  Update
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -491,108 +515,64 @@ export default function AdminUsersPage() {
 
       {/* Reset Password Modal */}
       {resetPasswordUserId && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
-          onClick={() => setResetPasswordUserId(null)}
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 ios-backdrop"
+          onClick={() => { setResetPasswordUserId(null); setNewPassword(''); }}
         >
-          <div 
-            className="bg-white rounded-xl max-w-md w-full p-6"
+          <div
+            className="bg-white w-full max-w-sm rounded-3xl overflow-hidden"
+            style={{ boxShadow: 'var(--ios-shadow-lg)' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Key className="w-5 h-5 text-blue-600" />
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(0, 122, 255, 0.1)' }}>
+                    <Key size={16} style={{ color: 'var(--ios-blue)' }} />
+                  </div>
+                  <div>
+                    <p className="text-base font-bold" style={{ color: 'var(--ios-label)' }}>Reset Password</p>
+                    <p className="text-xs" style={{ color: 'var(--ios-label-secondary)' }}>{users.find(u => u.id === resetPasswordUserId)?.email}</p>
+                  </div>
+                </div>
+                <button onClick={() => { setResetPasswordUserId(null); setNewPassword(''); }} className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: 'var(--ios-fill-tertiary)', color: 'var(--ios-label-secondary)' }}>
+                  <X size={14} />
+                </button>
               </div>
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">Reset Password</h2>
-                <p className="text-sm text-gray-600">
-                  {users.find(u => u.id === resetPasswordUserId)?.email}
-                </p>
+
+              <div className="mb-5">
+                <label className="block text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--ios-label-secondary)' }}>New Password</label>
+                <input
+                  type="text"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Enter new password"
+                  className="ios-input w-full"
+                />
+                <p className="mt-1.5 text-xs" style={{ color: 'var(--ios-label-secondary)' }}>Minimum 6 characters</p>
               </div>
-            </div>
 
-            <div className="mb-4">
-              <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                New Password
-              </label>
-              <input
-                id="newPassword"
-                type="text"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Enter new password"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <p className="text-xs text-gray-500 mt-1">Minimum 6 characters</p>
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                onClick={handleResetPassword}
-                disabled={newPassword.length < 6}
-                className="flex-1 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:bg-blue-400 transition-colors"
-              >
-                Reset Password
-              </button>
-              <button
-                onClick={() => {
-                  setResetPasswordUserId(null);
-                  setNewPassword('');
-                }}
-                className="flex-1 py-2 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition-colors"
-              >
-                Cancel
-              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { setResetPasswordUserId(null); setNewPassword(''); }}
+                  className="flex-1 py-4 rounded-2xl text-base font-semibold"
+                  style={{ backgroundColor: 'var(--ios-fill-tertiary)', color: 'var(--ios-label)' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleResetPassword}
+                  disabled={newPassword.length < 6}
+                  className="flex-1 py-4 rounded-2xl text-white text-base font-semibold disabled:opacity-40"
+                  style={{ backgroundColor: 'var(--ios-blue)' }}
+                >
+                  Reset
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
-
-      {/* Role Reference */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-              <Shield className="w-4 h-4 text-purple-600" />
-            </div>
-            <h3 className="font-bold text-gray-900">Admin</h3>
-          </div>
-          <ul className="text-sm text-gray-600 space-y-1">
-            <li>• Full system access</li>
-            <li>• Create users</li>
-            <li>• Delete records</li>
-            <li>• All features</li>
-          </ul>
-        </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-              <UsersIcon className="w-4 h-4 text-blue-600" />
-            </div>
-            <h3 className="font-bold text-gray-900">Staff</h3>
-          </div>
-          <ul className="text-sm text-gray-600 space-y-1">
-            <li>• Manage patients</li>
-            <li>• Record transactions</li>
-            <li>• View reports</li>
-            <li>• Standard access</li>
-          </ul>
-        </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-              <UsersIcon className="w-4 h-4 text-green-600" />
-            </div>
-            <h3 className="font-bold text-gray-900">Receptionist</h3>
-          </div>
-          <ul className="text-sm text-gray-600 space-y-1">
-            <li>• Check-in patients</li>
-            <li>• Search patients</li>
-            <li>• Basic features</li>
-            <li>• View only</li>
-          </ul>
-        </div>
-      </div>
     </div>
   );
 }

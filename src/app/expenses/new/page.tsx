@@ -2,11 +2,10 @@
 
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { TrendingDown, Loader2, AlertCircle, ArrowLeft, Home } from 'lucide-react';
+import { TrendingDown, Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
 import { createClient } from '@/utils/supabase/client';
 import { formatCurrency, formatNumberWithCommas, parseFormattedNumber } from '@/lib/utils';
 
-// Expense Categories - Keep categories broad
 const EXPENSE_CATEGORIES = [
   'Medical / Lenses',
   'Transport',
@@ -18,7 +17,6 @@ const EXPENSE_CATEGORIES = [
   'Other',
 ] as const;
 
-// Payment Methods for Expenses
 const PAYMENT_METHODS = [
   'Cash',
   'MoMo',
@@ -29,16 +27,22 @@ const PAYMENT_METHODS = [
 type ExpenseCategory = typeof EXPENSE_CATEGORIES[number];
 type PaymentMethod = typeof PAYMENT_METHODS[number];
 
+const CATEGORY_HINTS: Partial<Record<ExpenseCategory, string>> = {
+  'Medical / Lenses': 'Outsourced work, Pharmacy stock',
+  'Transport': 'SafeBoda, Fuel, Staff transport',
+  'Utilities / Airtime': 'Water, Power, Internet, MTN/Airtel data',
+  'Office / Printing': 'Paper, Ink, Pens',
+  'Staff Welfare': 'Lunch, Happy Hour, Water Dispenser',
+  'Salary / Advance': 'Staff payments',
+  'Maintenance': 'Repairs, Cleaning',
+};
+
 export default function NewExpensePage() {
   const router = useRouter();
-  
-  // Form State
   const [category, setCategory] = useState<ExpenseCategory>('Other');
   const [amount, setAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('Cash');
   const [description, setDescription] = useState('');
-  
-  // UI State
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -47,7 +51,6 @@ export default function NewExpensePage() {
     e.preventDefault();
     setError(null);
 
-    // Validate Amount - parse formatted number
     const amountValue = parseFormattedNumber(amount);
     if (isNaN(amountValue) || amountValue <= 0) {
       setError('Amount must be greater than 0');
@@ -57,10 +60,7 @@ export default function NewExpensePage() {
     try {
       setLoading(true);
       const supabase = createClient();
-
-      // Insert into Supabase ledger table
-      // Note: Using description field to store category + description since 'category' column doesn't exist
-      const fullDescription = description.trim() 
+      const fullDescription = description.trim()
         ? `[${category}] ${description.trim()}`
         : `[${category}]`;
 
@@ -71,16 +71,14 @@ export default function NewExpensePage() {
           amount: amountValue,
           payment_method: paymentMethod,
           description: fullDescription,
-          patient_id: null, // Expenses don't have patient associations
+          patient_id: null,
         });
 
       if (insertError) {
-        console.error('Error inserting expense:', insertError);
         setError(`Failed to record expense: ${insertError.message}`);
         return;
       }
 
-      // Success - Show success modal and reset form
       setShowSuccessModal(true);
       resetForm();
     } catch (err) {
@@ -91,20 +89,11 @@ export default function NewExpensePage() {
     }
   };
 
-  // Handle amount change with comma formatting
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    // Remove any non-digit characters except comma
-    const cleanValue = value.replace(/[^\d]/g, '');
-    // Format with commas
-    if (cleanValue) {
-      setAmount(formatNumberWithCommas(cleanValue));
-    } else {
-      setAmount('');
-    }
+    const cleanValue = e.target.value.replace(/[^\d]/g, '');
+    setAmount(cleanValue ? formatNumberWithCommas(cleanValue) : '');
   };
 
-  // Reset form
   const resetForm = () => {
     setCategory('Other');
     setAmount('');
@@ -113,206 +102,216 @@ export default function NewExpensePage() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 p-8">
-      <div className="max-w-2xl mx-auto">
-        {/* Navigation Bar - Clear and Visible */}
-        <div className="mb-6 flex items-center gap-3 bg-white rounded-lg shadow-sm p-4 border-2 border-slate-200">
-          <button
-            onClick={() => router.push('/')}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition-colors font-medium"
+    <div>
+      {/* Page header */}
+      <div className="flex items-center gap-3 mb-5">
+        <button
+          onClick={() => router.push('/')}
+          className="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
+          style={{ backgroundColor: 'var(--ios-fill-tertiary)', color: 'var(--ios-blue)' }}
+        >
+          <ArrowLeft size={18} />
+        </button>
+        <div className="flex items-center gap-3">
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center"
+            style={{ backgroundColor: 'rgba(255, 59, 48, 0.12)' }}
           >
-            <Home size={20} />
-            <span>Dashboard</span>
-          </button>
-          <button
-            onClick={() => router.back()}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors font-medium"
-          >
-            <ArrowLeft size={20} />
-            <span>Back</span>
-          </button>
-        </div>
-
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-4 mb-2">
-            <div className="bg-red-100 p-3 rounded-xl">
-              <TrendingDown className="text-red-600" size={32} />
-            </div>
-            <h1 className="text-4xl font-bold text-slate-900">Record Expense</h1>
+            <TrendingDown size={20} style={{ color: 'var(--ios-red)' }} />
           </div>
-          <p className="text-slate-600 ml-16">Track money leaving the hospital</p>
+          <div>
+            <h1 className="text-xl font-bold" style={{ color: 'var(--ios-label)' }}>Record Expense</h1>
+            <p className="text-xs" style={{ color: 'var(--ios-label-secondary)' }}>Track money leaving the hospital</p>
+          </div>
         </div>
+      </div>
 
-        {/* Form Card */}
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-md p-8">
-          {/* Error Message */}
-          {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
-              <AlertCircle className="text-red-600 shrink-0 mt-0.5" size={20} />
-              <p className="text-red-800 text-sm">{error}</p>
+      {/* Form Card */}
+      <form onSubmit={handleSubmit}>
+        {error && (
+          <div className="flex items-start gap-3 p-4 rounded-2xl mb-4" style={{ backgroundColor: 'rgba(255, 59, 48, 0.08)' }}>
+            <AlertCircle size={18} className="shrink-0 mt-0.5" style={{ color: 'var(--ios-red)' }} />
+            <p className="text-sm font-medium" style={{ color: 'var(--ios-red)' }}>{error}</p>
+          </div>
+        )}
+
+        {/* Grouped form sections */}
+        <div className="space-y-5">
+          {/* Category */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide mb-2 px-1" style={{ color: 'var(--ios-label-secondary)' }}>Category</p>
+            <div className="ios-card rounded-2xl overflow-hidden">
+              <div className="px-4 py-3">
+                <select
+                  id="category"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value as ExpenseCategory)}
+                  className="w-full text-base bg-transparent border-none outline-none"
+                  style={{ color: 'var(--ios-label)' }}
+                  required
+                >
+                  {EXPENSE_CATEGORIES.map((cat) => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
             </div>
-          )}
-
-          {/* Category Dropdown */}
-          <div className="mb-6">
-            <label htmlFor="category" className="block text-sm font-semibold text-slate-700 mb-2">
-              Category *
-            </label>
-            <select
-              id="category"
-              value={category}
-              onChange={(e) => setCategory(e.target.value as ExpenseCategory)}
-              className="w-full p-4 border-2 border-slate-200 rounded-lg text-base focus:border-red-500 focus:outline-none bg-white"
-              required
-            >
-              {EXPENSE_CATEGORIES.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-slate-500 mt-1">
-              {category === 'Medical / Lenses' && 'Outsourced work, Pharmacy stock'}
-              {category === 'Transport' && 'SafeBoda, Fuel, Staff transport'}
-              {category === 'Utilities / Airtime' && 'Water, Power, Internet, MTN/Airtel data'}
-              {category === 'Office / Printing' && 'Paper, Ink, Pens'}
-              {category === 'Staff Welfare' && 'Lunch, Happy Hour, Water Dispenser'}
-              {category === 'Salary / Advance' && 'Staff payments'}
-              {category === 'Maintenance' && 'Repairs, Cleaning'}
-            </p>
+            {CATEGORY_HINTS[category] && (
+              <p className="mt-1.5 text-xs px-1" style={{ color: 'var(--ios-label-secondary)' }}>
+                {CATEGORY_HINTS[category]}
+              </p>
+            )}
           </div>
 
-          {/* Amount Input */}
-          <div className="mb-6">
-            <label htmlFor="amount" className="block text-sm font-semibold text-slate-700 mb-2">
-              Amount (UGX) *
-            </label>
-            <input
-              id="amount"
-              type="text"
-              value={amount}
-              onChange={handleAmountChange}
-              placeholder="0"
-              className="w-full p-4 border-2 border-slate-200 rounded-lg text-base focus:border-red-500 focus:outline-none"
-              required
-            />
+          {/* Amount */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide mb-2 px-1" style={{ color: 'var(--ios-label-secondary)' }}>Amount</p>
+            <div className="ios-card rounded-2xl overflow-hidden">
+              <div className="flex items-center px-4 py-3 gap-3">
+                <span className="text-sm font-semibold" style={{ color: 'var(--ios-label-secondary)' }}>UGX</span>
+                <input
+                  id="amount"
+                  type="text"
+                  value={amount}
+                  onChange={handleAmountChange}
+                  placeholder="0"
+                  className="flex-1 text-xl font-semibold bg-transparent border-none outline-none"
+                  style={{ color: 'var(--ios-label)' }}
+                  required
+                />
+              </div>
+            </div>
             {amount && parseFormattedNumber(amount) > 0 && (
-              <p className="text-sm text-slate-600 mt-1">
+              <p className="mt-1.5 text-xs px-1 font-medium" style={{ color: 'var(--ios-blue)' }}>
                 {formatCurrency(parseFormattedNumber(amount))}
               </p>
             )}
           </div>
 
-          {/* Payment Method Dropdown */}
-          <div className="mb-6">
-            <label htmlFor="paymentMethod" className="block text-sm font-semibold text-slate-700 mb-2">
-              Payment Method *
-            </label>
-            <select
-              id="paymentMethod"
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-              className="w-full p-4 border-2 border-slate-200 rounded-lg text-base focus:border-red-500 focus:outline-none bg-white"
-              required
-            >
-              {PAYMENT_METHODS.map((method) => (
-                <option key={method} value={method}>
-                  {method}
-                </option>
-              ))}
-            </select>
+          {/* Payment Method */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide mb-2 px-1" style={{ color: 'var(--ios-label-secondary)' }}>Payment Method</p>
+            <div className="ios-card rounded-2xl overflow-hidden">
+              <div className="px-4 py-3">
+                <select
+                  id="paymentMethod"
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+                  className="w-full text-base bg-transparent border-none outline-none"
+                  style={{ color: 'var(--ios-label)' }}
+                  required
+                >
+                  {PAYMENT_METHODS.map((method) => (
+                    <option key={method} value={method}>{method}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
 
-          {/* Description Textarea */}
-          <div className="mb-8">
-            <label htmlFor="description" className="block text-sm font-semibold text-slate-700 mb-2">
-              Description
-            </label>
-            <textarea
-              id="description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="e.g. SafeBoda to deliver samples or Advance for Fadir"
-              rows={4}
-              className="w-full p-4 border-2 border-slate-200 rounded-lg text-base focus:border-red-500 focus:outline-none resize-none"
-            />
-            <p className="text-xs text-slate-500 mt-1">Optional - Add details about this expense</p>
+          {/* Description */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide mb-2 px-1" style={{ color: 'var(--ios-label-secondary)' }}>Description (Optional)</p>
+            <div className="ios-card rounded-2xl overflow-hidden">
+              <div className="px-4 py-3">
+                <textarea
+                  id="description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="e.g. SafeBoda to deliver samples or Advance for Fadir"
+                  rows={3}
+                  className="w-full text-base bg-transparent border-none outline-none resize-none"
+                  style={{ color: 'var(--ios-label)' }}
+                />
+              </div>
+            </div>
+            <p className="mt-1.5 text-xs px-1" style={{ color: 'var(--ios-label-secondary)' }}>
+              Add details about this expense
+            </p>
           </div>
+        </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-4">
-            <button
-              type="button"
-              onClick={() => router.push('/')}
-              disabled={loading}
-              className="flex-1 py-4 px-6 bg-slate-100 text-slate-700 rounded-lg font-bold text-lg hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex-1 py-4 px-6 bg-red-600 text-white rounded-lg font-bold text-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="animate-spin" size={20} />
-                  Processing...
-                </>
-              ) : (
-                'CONFIRM EXPENSE'
-              )}
-            </button>
-          </div>
-        </form>
+        {/* Action Buttons */}
+        <div className="flex gap-3 mt-6">
+          <button
+            type="button"
+            onClick={() => router.push('/')}
+            disabled={loading}
+            className="flex-1 py-4 rounded-2xl text-base font-semibold disabled:opacity-40"
+            style={{ backgroundColor: 'var(--ios-fill-tertiary)', color: 'var(--ios-label)' }}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex-1 py-4 rounded-2xl text-white text-base font-semibold disabled:opacity-40 flex items-center justify-center gap-2"
+            style={{ backgroundColor: 'var(--ios-red)' }}
+          >
+            {loading ? (
+              <>
+                <Loader2 className="animate-spin" size={18} />
+                Processing…
+              </>
+            ) : (
+              'Confirm Expense'
+            )}
+          </button>
+        </div>
 
         {/* Quick Tips */}
-        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h3 className="text-sm font-semibold text-blue-900 mb-2">Quick Tips:</h3>
-          <ul className="text-sm text-blue-800 space-y-1">
-            <li>• Keep descriptions brief but specific for easy tracking</li>
+        <div className="mt-5 p-4 rounded-2xl" style={{ backgroundColor: 'rgba(0, 122, 255, 0.06)' }}>
+          <p className="text-xs font-semibold mb-2" style={{ color: 'var(--ios-blue)' }}>Quick Tips</p>
+          <ul className="text-xs space-y-1" style={{ color: 'var(--ios-label-secondary)' }}>
             <li>• Cash expenses reduce your available cash on hand</li>
             <li>• Digital payments (MoMo/Airtel/Bank) reduce digital balance</li>
             <li>• All expenses appear on the Dashboard and Reports</li>
           </ul>
         </div>
-      </div>
+      </form>
 
       {/* Success Modal */}
       {showSuccessModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 ios-backdrop"
+          onClick={() => setShowSuccessModal(false)}
+        >
+          <div
+            className="bg-white w-full max-w-sm rounded-3xl overflow-hidden"
+            style={{ boxShadow: 'var(--ios-shadow-lg)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6">
+              <div className="flex flex-col items-center text-center mb-6">
+                <div className="w-14 h-14 rounded-full flex items-center justify-center mb-3" style={{ backgroundColor: 'rgba(255, 59, 48, 0.12)' }}>
+                  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: 'var(--ios-red)' }}>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h2 className="text-lg font-bold mb-1" style={{ color: 'var(--ios-label)' }}>Expense Recorded!</h2>
+                <p className="text-sm" style={{ color: 'var(--ios-label-secondary)' }}>The expense has been added to the ledger.</p>
               </div>
-              <h2 className="text-2xl font-bold text-slate-900 mb-2">Expense Recorded!</h2>
-              <p className="text-slate-600">The expense has been added to the ledger.</p>
-            </div>
 
-            <div className="space-y-3">
-              <button
-                onClick={() => {
-                  setShowSuccessModal(false);
-                  // Form is already reset, ready for another entry
-                }}
-                className="w-full bg-red-600 hover:bg-red-700 text-white p-3 rounded-lg font-semibold transition-colors"
-              >
-                Add Another Expense
-              </button>
-              <button
-                onClick={() => router.push('/')}
-                className="w-full bg-slate-600 hover:bg-slate-700 text-white p-3 rounded-lg font-semibold transition-colors"
-              >
-                Back to Dashboard
-              </button>
+              <div className="space-y-2">
+                <button
+                  onClick={() => setShowSuccessModal(false)}
+                  className="w-full py-4 rounded-2xl text-white text-base font-semibold"
+                  style={{ backgroundColor: 'var(--ios-red)' }}
+                >
+                  Add Another Expense
+                </button>
+                <button
+                  onClick={() => router.push('/')}
+                  className="w-full py-4 rounded-2xl text-base font-semibold"
+                  style={{ backgroundColor: 'var(--ios-fill-tertiary)', color: 'var(--ios-label)' }}
+                >
+                  Back to Dashboard
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }

@@ -1,6 +1,211 @@
 @import "tailwindcss";
 
+/* iOS Design System Tokens */
+:root {
+  /* Backgrounds */
+  --ios-bg: #F2F2F7;
+  --ios-bg-secondary: #E5E5EA;
+  --ios-card: #FFFFFF;
+  --ios-card-secondary: #F2F2F7;
+
+  /* iOS System Colors */
+  --ios-blue: #007AFF;
+  --ios-green: #34C759;
+  --ios-red: #FF3B30;
+  --ios-orange: #FF9500;
+  --ios-purple: #AF52DE;
+  --ios-yellow: #FFCC00;
+  --ios-teal: #5AC8FA;
+  --ios-indigo: #5856D6;
+
+  /* Labels — darker for readability */
+  --ios-label: #1a1a1a;
+  --ios-label-secondary: #4a4a4d;
+  --ios-label-tertiary: #6b6b6e;
+  --ios-label-quaternary: #8a8a8d;
+
+  /* Separators */
+  --ios-separator: #C6C6C8;
+  --ios-separator-opaque: #E5E5EA;
+
+  /* Fills */
+  --ios-fill: rgba(120, 120, 128, 0.2);
+  --ios-fill-secondary: rgba(120, 120, 128, 0.16);
+  --ios-fill-tertiary: rgba(118, 118, 128, 0.12);
+
+  /* Shadows */
+  --ios-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --ios-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.05);
+  --ios-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* System font stack — SF Pro on Apple, system-ui elsewhere */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 body {
-  background-color: #f8fafc; /* Slate-50 */
-  color: #0f172a; /* Slate-900 */
+  background-color: var(--ios-bg);
+  color: var(--ios-label);
+  font-family: var(--font-poppins), -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* iOS-style smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* iOS-style tap highlight removal */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* iOS-style selection */
+::selection {
+  background-color: rgba(0, 122, 255, 0.2);
+}
+
+/* Utility classes for iOS tokens */
+.ios-card {
+  background-color: var(--ios-card);
+  border-radius: 16px;
+  box-shadow: var(--ios-shadow);
+}
+
+.ios-input {
+  background-color: var(--ios-card-secondary);
+  border: none;
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-size: 17px;
+  color: var(--ios-label);
+  outline: none;
+  transition: background-color 0.15s ease;
+}
+
+.ios-input:focus {
+  background-color: #FFFFFF;
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
+}
+
+.ios-btn-primary {
+  background-color: var(--ios-blue);
+  color: white;
+  border-radius: 14px;
+  padding: 16px;
+  font-size: 17px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+  width: 100%;
+}
+
+.ios-btn-primary:hover {
+  opacity: 0.9;
+}
+
+.ios-btn-primary:active {
+  transform: scale(0.98);
+  opacity: 0.85;
+}
+
+.ios-btn-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ios-list-row {
+  background-color: var(--ios-card);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: background-color 0.1s ease;
+}
+
+.ios-list-row:active {
+  background-color: var(--ios-bg-secondary);
+}
+
+.ios-segmented-control {
+  background-color: var(--ios-fill-tertiary);
+  border-radius: 9px;
+  padding: 2px;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+/* Full-width variant — used for page-level tab bars */
+.ios-segmented-control.w-full {
+  display: flex;
+  width: 100%;
+}
+
+.ios-segmented-option {
+  padding: 6px 14px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ios-label);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.ios-segmented-option.active {
+  background-color: var(--ios-card);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08);
+  color: var(--ios-label);
+  font-weight: 600;
+}
+
+/* Scrollable tab bar wrapper */
+.ios-tab-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.ios-tab-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* iOS modal backdrop */
+.ios-backdrop {
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* Frosted glass */
+.ios-frosted {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+
+/* Safe area bottom padding — for iPhone notch / home indicator */
+.ios-safe-bottom {
+  padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+}
+
+/* Bottom sheet safe padding */
+.ios-bottom-sheet {
+  padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+}
+
+/* Prevent content overflow on small screens */
+.ios-card {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* Ensure inputs don't trigger zoom on iOS (font-size must be >= 16px) */
+input, select, textarea {
+  font-size: max(16px, 1em);
 }

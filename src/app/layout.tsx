@@ -1,13 +1,25 @@
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css'; // <--- THIS IS THE MAGIC LINE
+import type { Metadata, Viewport } from 'next';
+import { Poppins } from 'next/font/google';
+import './globals.css';
 import { Header } from '@/components/Header';
 
-const inter = Inter({ subsets: ['latin'] });
+const poppins = Poppins({
+  weight: ['400', '500', '600', '700'],
+  subsets: ['latin'],
+  variable: '--font-poppins',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
-  title: 'KELH Manager V2',
+  title: 'KELH Manager',
   description: 'Hospital Management System',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({
@@ -16,11 +28,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang='en'>
-      <body className={inter.className}>
-        <div className='min-h-screen flex flex-col bg-slate-50 text-slate-900'>
+    <html lang='en' className={poppins.variable}>
+      <body>
+        <div className='min-h-screen flex flex-col' style={{ backgroundColor: 'var(--ios-bg)' }}>
           <Header />
-          <main className='flex-1 w-full max-w-7xl mx-auto p-4 md:p-6'>
+          <main className='flex-1 w-full max-w-[1200px] mx-auto px-4 py-5 sm:px-6 md:px-8 md:py-7'>
             {children}
           </main>
         </div>
